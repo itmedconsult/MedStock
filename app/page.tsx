@@ -1,8 +1,16 @@
 "use client";
 
-import { ChangeEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import Barcode from "react-barcode";
-import { brotherPrinterConfig, printProductsToBrother } from "@/lib/brother-print";
+import {
+  BrotherLabelStatus,
+  BrotherPrintLabel,
+  BrotherPrintLog,
+  brotherPrinterConfig,
+  formatBarcodeUuid,
+  prepareBrotherPrintLabels,
+  printLabelsToBrother,
+} from "@/lib/brother-print";
 import {
   IconBarcode,
   IconCalendar,
@@ -11,6 +19,7 @@ import {
   IconPackage,
   IconPhotoEdit,
   IconPill,
+  IconRefresh,
   IconSearch,
   IconStethoscope,
   IconVaccine,
@@ -18,29 +27,44 @@ import {
 } from "@tabler/icons-react";
 
 type Product = {
-  id: number;
+  id: string;
   name: string;
   sku: string;
   date: string;
   quantity: number;
-  initialQuantity: number;
   category: string;
   accent: string;
   tint: string;
+  unit: string;
   image?: string;
 };
 
-const seedProducts: Product[] = [
-  { id: 1, name: "Paracetamol 500 mg", sku: "MED-PCM-500", date: "2026-09-16", quantity: 48, initialQuantity: 48, category: "Tablets", accent: "#2e7d6b", tint: "#e3f2ed" },
-  { id: 2, name: "Amoxicillin 250 mg", sku: "MED-AMX-250", date: "2026-09-15", quantity: 24, initialQuantity: 24, category: "Capsules", accent: "#c58148", tint: "#faeee3" },
-  { id: 3, name: "Insulin Glargine", sku: "MED-INS-100", date: "2026-09-16", quantity: 12, initialQuantity: 12, category: "Injection", accent: "#5b78a6", tint: "#e7edf7" },
-  { id: 4, name: "Surgical Masks", sku: "SUP-MSK-050", date: "2026-09-14", quantity: 96, initialQuantity: 96, category: "Supplies", accent: "#735f9b", tint: "#eeeaf5" },
-  { id: 5, name: "Vitamin C 1000 mg", sku: "MED-VTC-1K", date: "2026-09-13", quantity: 36, initialQuantity: 36, category: "Supplements", accent: "#b26d55", tint: "#f9eae4" },
-  { id: 6, name: "Digital Thermometer", sku: "DEV-THM-001", date: "2026-09-12", quantity: 18, initialQuantity: 18, category: "Devices", accent: "#367b8a", tint: "#e2f0f3" },
+type InventoryApiResponse = {
+  products?: Array<Pick<Product, "name" | "sku" | "date" | "category" | "unit" | "image">>;
+  updatedAt?: string;
+  error?: string;
+};
+
+type PrintLabelState = BrotherPrintLabel & {
+  status: BrotherLabelStatus;
+  error?: string;
+};
+
+const categoryPalettes = [
+  { accent: "#2e7d6b", tint: "#e3f2ed" },
+  { accent: "#c58148", tint: "#faeee3" },
+  { accent: "#5b78a6", tint: "#e7edf7" },
+  { accent: "#735f9b", tint: "#eeeaf5" },
+  { accent: "#b26d55", tint: "#f9eae4" },
+  { accent: "#367b8a", tint: "#e2f0f3" },
 ];
 
+function paletteFor(category: string) {
+  const hash = Array.from(category).reduce((total, character) => total + character.charCodeAt(0), 0);
+  return categoryPalettes[hash % categoryPalettes.length];
+}
+
 function ProductArtwork({ product }: { product: Product }) {
-  if (product.image) return <img className="product-image" src={product.image} alt={product.name} />;
   const Icon = product.category === "Injection" ? IconVaccine : product.category === "Devices" ? IconStethoscope : product.category === "Supplies" ? IconPackage : IconPill;
   return (
     <div className="product-art" style={{ background: product.tint, color: product.accent }}>
@@ -48,19 +72,75 @@ function ProductArtwork({ product }: { product: Product }) {
       <span className="art-orbit orbit-two" />
       <Icon size={58} stroke={1.35} />
       <span className="art-label">{product.category}</span>
+      {product.image && (
+        <img
+          className="product-image"
+          src={product.image}
+          alt={product.name}
+          onError={(event) => { event.currentTarget.style.display = "none"; }}
+        />
+      )}
     </div>
   );
 }
 
 export default function InventoryPage() {
-  const [products, setProducts] = useState(seedProducts);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [inventoryState, setInventoryState] = useState<"loading" | "ready" | "error">("loading");
+  const [inventoryError, setInventoryError] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState("");
   const [search, setSearch] = useState("");
   const [date, setDate] = useState("");
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
   const [printStatus, setPrintStatus] = useState<"idle" | "printing" | "success" | "error">("idle");
   const [printMessage, setPrintMessage] = useState("");
+  const [printLogs, setPrintLogs] = useState<BrotherPrintLog[]>([]);
+  const [printLabels, setPrintLabels] = useState<PrintLabelState[]>([]);
   const [toast, setToast] = useState(false);
   const dateInput = useRef<HTMLInputElement>(null);
+
+  const loadInventory = async (signal?: AbortSignal, preserveQuantities = false) => {
+    if (preserveQuantities) setIsSyncing(true);
+    else setInventoryState("loading");
+    setInventoryError("");
+
+    try {
+      const response = await fetch("/api/inventory", { cache: "no-store", signal });
+      const data = await response.json() as InventoryApiResponse;
+      if (!response.ok) throw new Error(data.error || "Unable to load products from Google Sheets.");
+
+      const nextProducts = (data.products || []).map((product) => ({
+        ...product,
+        id: product.sku,
+        quantity: 0,
+        image: `/products/${encodeURIComponent(product.sku)}.webp`,
+        ...paletteFor(product.category),
+      }));
+
+      setProducts((current) => nextProducts.map((product) => ({
+        ...product,
+        quantity: preserveQuantities
+          ? current.find((currentProduct) => currentProduct.id === product.id)?.quantity || 0
+          : 0,
+      })));
+      setUpdatedAt(data.updatedAt || new Date().toISOString());
+      setInventoryState("ready");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setProducts([]);
+      setInventoryError(error instanceof Error ? error.message : "Unable to load products from Google Sheets.");
+      setInventoryState("error");
+    } finally {
+      if (preserveQuantities) setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadInventory(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const filtered = useMemo(() => products.filter((product) => {
     const term = search.trim().toLowerCase();
@@ -73,11 +153,16 @@ export default function InventoryPage() {
     [products],
   );
 
-  const adjustQuantity = (id: number, amount: number) => {
+  const retryableLabels = useMemo(
+    () => printLabels.filter((label) => label.status === "failed" || label.status === "queued"),
+    [printLabels],
+  );
+
+  const adjustQuantity = (id: string, amount: number) => {
     setProducts((current) => current.map((product) => product.id === id ? { ...product, quantity: Math.max(0, product.quantity + amount) } : product));
   };
 
-  const changeImage = (id: number, event: ChangeEvent<HTMLInputElement>) => {
+  const changeImage = (id: string, event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const image = URL.createObjectURL(file);
@@ -97,18 +182,52 @@ export default function InventoryPage() {
     setIsBarcodeModalOpen(false);
     setPrintStatus("idle");
     setPrintMessage("");
+    setPrintLogs([]);
+    setPrintLabels([]);
   };
 
-  const printWithBrother = async () => {
+  const runBrotherPrint = async (labels: BrotherPrintLabel[]) => {
+    if (!labels.length) return;
+
     setPrintStatus("printing");
-    setPrintMessage("Sending labels to Brother QL-820NWB…");
+    setPrintMessage(`Sending ${labels.length} ${labels.length === 1 ? "label" : "labels"} to Brother QL-820NWB…`);
+    setPrintLogs([]);
+
+    const targetUuids = new Set(labels.map((label) => label.uuid));
+    setPrintLabels((current) => current.map((label) => targetUuids.has(label.uuid)
+      ? { ...label, status: "queued", error: undefined }
+      : label));
+
     try {
-      await printProductsToBrother(barcodeProducts);
-      setPrintStatus("success");
-      setPrintMessage("Labels sent to Brother QL-820NWB successfully.");
+      const result = await printLabelsToBrother(
+        labels,
+        (entry) => setPrintLogs((current) => [...current, entry]),
+        (update) => setPrintLabels((current) => current.map((label) => label.uuid === update.uuid
+          ? { ...label, status: update.status, error: update.error }
+          : label)),
+      );
+
+      if (result.failed > 0 || result.pending > 0) {
+        setPrintStatus("error");
+        setPrintMessage(`${result.sent} sent, ${result.failed} failed, ${result.pending} not attempted. Clear the printer error, then retry only failed/unprinted labels.`);
+      } else {
+        setPrintStatus("success");
+        setPrintMessage(`${result.sent} ${result.sent === 1 ? "label was" : "labels were"} accepted by Brother with no hardware error reported.`);
+      }
     } catch (error) {
       setPrintStatus("error");
       setPrintMessage(error instanceof Error ? error.message : "Unable to print to Brother QL-820NWB.");
+    }
+  };
+
+  const printWithBrother = async () => {
+    try {
+      const labels = prepareBrotherPrintLabels(barcodeProducts);
+      setPrintLabels(labels.map((label) => ({ ...label, status: "queued" })));
+      await runBrotherPrint(labels);
+    } catch (error) {
+      setPrintStatus("error");
+      setPrintMessage(error instanceof Error ? error.message : "Unable to prepare barcode labels.");
     }
   };
 
@@ -119,7 +238,7 @@ export default function InventoryPage() {
           <span className="brand-mark"><IconPill size={22} /></span>
           <span>Med<span>Stock</span></span>
         </a>
-        <div className="header-status"><span className="status-dot" />Inventory system online</div>
+        <div className={`header-status ${inventoryState}`}><span className="status-dot" />{inventoryState === "ready" ? "Google Sheets connected" : inventoryState === "loading" ? "Connecting to Google Sheets…" : "Google Sheets disconnected"}</div>
         <button className="avatar" aria-label="Account menu">MS</button>
       </header>
 
@@ -133,7 +252,7 @@ export default function InventoryPage() {
             <IconSearch size={22} />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, SKU, or category…" autoFocus />
             {search && <button onClick={() => setSearch("")} aria-label="Clear search"><IconX size={18} /></button>}
-            <span className="shortcut">⌘ K</span>
+            
           </div>
           <button className={`date-control ${date ? "active" : ""}`} onClick={() => dateInput.current?.showPicker()}>
             <IconCalendar size={18} />
@@ -150,10 +269,34 @@ export default function InventoryPage() {
             <p className="section-kicker">Current inventory</p>
             <h2>{filtered.length} {filtered.length === 1 ? "item" : "items"}</h2>
           </div>
-          <p>Updated just now</p>
+          <div className="inventory-sync">
+            <button
+              className="sync-button"
+              onClick={() => void loadInventory(undefined, true)}
+              disabled={isSyncing || inventoryState === "loading"}
+              aria-label="Sync inventory with Google Sheets"
+            >
+              <IconRefresh className={isSyncing ? "spinning" : ""} size={16} />
+              {isSyncing ? "Syncing…" : "Sync"}
+            </button>
+            <p aria-live="polite">{updatedAt ? `Updated ${new Date(updatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : inventoryState === "loading" ? "Loading from Google Sheets…" : "Not synced"}</p>
+          </div>
         </div>
 
-        {filtered.length > 0 ? (
+        {inventoryState === "loading" ? (
+          <div className="inventory-state" aria-live="polite">
+            <span className="loading-spinner" />
+            <h3>Loading products</h3>
+            <p>Reading the active product list from Google Sheets.</p>
+          </div>
+        ) : inventoryState === "error" ? (
+          <div className="inventory-state error-state" role="alert">
+            <IconX size={38} stroke={1.5} />
+            <h3>Google Sheets connection failed</h3>
+            <p>{inventoryError}</p>
+            <button onClick={() => void loadInventory()}>Try again</button>
+          </div>
+        ) : filtered.length > 0 ? (
           <div className="product-grid">
             {filtered.map((product) => (
               <article className="product-card" key={product.id}>
@@ -172,7 +315,7 @@ export default function InventoryPage() {
                     <span><small>STOCK DATE</small>{new Date(`${product.date}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
                   </div>
                   <div className="quantity-row">
-                    <div><small>QUANTITY</small><strong>{product.quantity}</strong><span> units</span></div>
+                    <div><small>QUANTITY</small><strong>{product.quantity}</strong><span> {product.unit}</span></div>
                     <div className="stepper">
                       <button onClick={() => adjustQuantity(product.id, -1)} aria-label={`Decrease ${product.name}`}>−</button>
                       <button onClick={() => adjustQuantity(product.id, 1)} aria-label={`Increase ${product.name}`}>+</button>
@@ -193,7 +336,7 @@ export default function InventoryPage() {
       </section>
 
       <div className="action-dock">
-        <button className="generate-button" onClick={() => { setIsBarcodeModalOpen(true); setPrintStatus("idle"); setPrintMessage(""); }} disabled={!barcodeProducts.length}>
+        <button className="generate-button" onClick={() => { setIsBarcodeModalOpen(true); setPrintStatus("idle"); setPrintMessage(""); setPrintLogs([]); setPrintLabels([]); }} disabled={!barcodeProducts.length}>
           <IconBarcode size={21} /> Generate {barcodeProducts.length === 1 ? "barcode" : "barcodes"}
           {barcodeProducts.length > 0 && <span className="selection-count">{barcodeProducts.length}</span>}
         </button>
@@ -207,7 +350,7 @@ export default function InventoryPage() {
             <div className="success-icon"><IconCheck size={22} /></div>
             <p className="section-kicker">Barcodes ready</p>
             <h2 id="barcode-modal-title">{barcodeProducts.length} {barcodeProducts.length === 1 ? "product" : "products"} with stock</h2>
-            <p className="barcode-help">Products with a quantity above zero are included automatically.</p>
+            <p className="barcode-help">Products with a quantity above zero are included automatically. Exact UUIDs are reserved when printing starts.</p>
             <div className="printer-chip">
               <span className="printer-dot" />
               <div><strong>{brotherPrinterConfig.model}</strong><small>{brotherPrinterConfig.connection} direct print</small></div>
@@ -223,15 +366,70 @@ export default function InventoryPage() {
                     <span>{product.category}</span>
                   </div>
                   <div className="barcode-paper">
-                    <Barcode value={product.sku} format="CODE128" height={58} width={1.35} fontSize={13} background="transparent" />
+                    <Barcode value={formatBarcodeUuid(product.sku, product.date, 1)} format="CODE128" height={58} width={1.1} fontSize={11} background="transparent" />
                   </div>
                 </article>
               ))}
             </div>
             {printMessage && <div className={`print-message ${printStatus}`} role="status">{printMessage}</div>}
+            {printLabels.length > 0 && (
+              <section className="label-results" aria-label="Individual label print status">
+                <div className="label-results-heading">
+                  <strong>Individual labels</strong>
+                  <span>{printLabels.filter((label) => label.status === "sent").length}/{printLabels.length} sent</span>
+                </div>
+                <div className="label-result-list">
+                  {printLabels.map((label) => (
+                    <article className={`label-result ${label.status}`} key={label.uuid}>
+                      <div>
+                        <strong>{label.name}</strong>
+                        <code>{label.uuid}</code>
+                        {label.error && <small>{label.error}</small>}
+                      </div>
+                      <span className="label-status">{label.status === "sent" ? "Sent" : label.status === "printing" ? "Printing…" : label.status === "failed" ? "Failed" : "Not printed"}</span>
+                      <button
+                        onClick={() => void runBrotherPrint([label])}
+                        disabled={printStatus === "printing"}
+                        title={label.status === "sent" ? "Reprint this exact UUID if the physical label did not come out" : "Retry this exact UUID"}
+                      >
+                        {label.status === "sent" ? "Reprint" : "Retry"}
+                      </button>
+                    </article>
+                  ))}
+                </div>
+                <p className="label-results-note">“Sent” means Brother accepted the job and reported no error. If a physical label is missing after a paper jam, use Reprint beside that UUID.</p>
+              </section>
+            )}
+            {printLogs.length > 0 && (
+              <section className="print-log" aria-label="Brother print log">
+                <div className="print-log-heading">
+                  <strong>Brother print log</strong>
+                  <span>{printLogs.length} events</span>
+                </div>
+                <ol>
+                  {printLogs.map((entry, index) => (
+                    <li className={entry.level} key={`${entry.timestamp}-${entry.step}-${index}`}>
+                      <time>{entry.timestamp}</time>
+                      <strong>{entry.step}</strong>
+                      <span>{entry.message}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
             <div className="barcode-actions">
-              <button className="print-button" onClick={printWithBrother} disabled={printStatus === "printing"}>
-                {printStatus === "printing" ? "Sending to printer…" : "Print to Brother QL-820NWB"}
+              <button
+                className="print-button"
+                onClick={() => printLabels.length > 0 ? void runBrotherPrint(retryableLabels) : void printWithBrother()}
+                disabled={printStatus === "printing" || (printLabels.length > 0 && retryableLabels.length === 0)}
+              >
+                {printStatus === "printing"
+                  ? "Sending to printer…"
+                  : printLabels.length === 0
+                    ? "Print to Brother QL-820NWB"
+                    : retryableLabels.length > 0
+                      ? `Retry ${retryableLabels.length} failed/unprinted`
+                      : "All labels sent"}
               </button>
               <button className="cancel-button" onClick={closeBarcodeModal} disabled={printStatus === "printing"}>Close</button>
             </div>
@@ -243,3 +441,4 @@ export default function InventoryPage() {
     </main>
   );
 }
+

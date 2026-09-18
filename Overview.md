@@ -43,9 +43,9 @@
 ## Current printing status
 
 - เว็บโหลด `bpac.js` และเรียก Brother b-PAC ได้แล้ว
-- ขณะนี้ยังพิมพ์ไม่ได้ เพราะยังไม่มีไฟล์ `C:\MedStock\labels\medstock.lbx`
-- สร้างโฟลเดอร์ `C:\MedStock\labels` แล้ว
-- ต้องสร้างและบันทึกแม่แบบ `.lbx` ด้วย P-touch Editor ให้ตรงกับขนาดม้วน DK ที่ติดตั้งในเครื่อง
+- สร้างไฟล์ `C:\MedStock\labels\medstock.lbx` ด้วย P-touch Editor แล้ว
+- แม่แบบต้องตั้ง `Object Name` ให้ตรงกับ `product_name`, `barcode` และ `uuid`
+- ต้องปิด P-touch Editor ก่อนสั่งพิมพ์ เพื่อไม่ให้ไฟล์ `.lbx` ถูกล็อก
 - ควรเปิดเว็บผ่าน Chrome หรือ Edge ที่ติดตั้ง Brother b-PAC Extension ไม่ใช่ Codex in-app browser
 
 ## Agreed label format
@@ -59,26 +59,22 @@
 รูปแบบ UUID ที่ตกลงไว้:
 
 ```text
-{SKU}-{StockDate}-BC-{RunningNumber}
+{SKU}-{StockDate:DDMMYY}-{RunningNumber}
 ```
 
 ตัวอย่าง:
 
 ```text
-MED-PCM-500-20260916-BC-A0001
-MED-PCM-500-20260916-BC-A0002
+MED-PCM-500-160926-A0001
+MED-PCM-500-160926-A0002
 ```
 
 ใน P-touch Editor ให้สร้างวัตถุและตั้ง `Object Name` เป็น `product_name`, `barcode` และ `uuid` ตามลำดับ ข้อมูลตัวอย่างที่ใส่ตอนออกแบบไม่มีผล เพราะ MedStock จะเขียนค่าจริงทับก่อนพิมพ์
 
 ## Pending work
 
-- สร้าง `C:\MedStock\labels\medstock.lbx` ใน P-touch Editor
-- ปรับ `lib/brother-print.ts` จากวัตถุเดิม `product_name`, `sku`, `barcode`, `category` ให้ใช้ `product_name`, `barcode`, `uuid`
-- เปลี่ยน Barcode จากการเข้ารหัส SKU เป็นการเข้ารหัส UUID
-- สร้าง UUID แยกสำหรับสินค้าแต่ละชิ้น เช่น Quantity 2 ต้องได้ `A0001` และ `A0002` ไม่ใช่พิมพ์รหัสเดียวกันสองใบ
-- เปลี่ยนการพิมพ์จาก `PrintOut(quantity)` เป็นวนพิมพ์ครั้งละหนึ่งฉลากหลังเปลี่ยน UUID ของแต่ละชิ้น
-- บันทึก Running number ล่าสุดในฐานข้อมูลหรือระบบจัดเก็บถาวร เพื่อป้องกัน UUID ซ้ำหลัง Refresh หรือ Restart
+- ตรวจสอบ Object Name ใน `medstock.lbx` ให้ครบ `product_name`, `barcode` และ `uuid`
+- ย้าย Running number จาก browser local storage ไปเก็บในฐานข้อมูล ก่อนใช้งานพร้อมกันหลายเครื่อง
 - ทดสอบพิมพ์จริงกับ Brother QL-820NWB และม้วน DK ที่ใช้งาน
 
 ## Related files
@@ -100,4 +96,10 @@ MED-PCM-500-20260916-BC-A0002
 - แก้ Hydration error ที่เกิดหลังติดตั้ง b-PAC Extension
 - พบและติดตั้ง `bpac.js` ลงในโปรเจกต์สำเร็จ
 - ตรวจพบว่าไฟล์แม่แบบ `medstock.lbx` ยังไม่มี และสร้างโฟลเดอร์ `labels` เตรียมไว้แล้ว
-- กำหนดแนวทาง UUID รายชิ้นเป็น `{SKU}-{StockDate}-BC-{RunningNumber}`
+- สร้างไฟล์แม่แบบ `medstock.lbx` สำหรับฉลากขนาด 62 × 40 มม.
+- เปลี่ยนรูปแบบ UUID รายชิ้นเป็น `{SKU}-{StockDate:DDMMYY}-{RunningNumber}`
+- ตัดวัตถุ `sku` และ `category` ออกจากแม่แบบที่โค้ดต้องใช้
+- เพิ่มการพิมพ์ทีละหนึ่งฉลาก พร้อม UUID ลำดับถัดไปต่อ SKU และวันที่
+- เก็บ Running number ชั่วคราวใน browser local storage
+- เพิ่ม Brother print log ใน Modal สำหรับดูสถานะ template, printer, USB port, media, UUID, ผลลัพธ์ `StartPrint`, `PrintOut`, `EndPrint` และ error code
+- เปลี่ยนเงื่อนไขสำเร็จให้ยอมรับเฉพาะเมื่อ b-PAC คืนค่า `true` ในทุกขั้นตอนการพิมพ์

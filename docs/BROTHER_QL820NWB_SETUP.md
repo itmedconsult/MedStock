@@ -13,11 +13,12 @@ MedStock prints directly from Chrome or Edge through Brother b-PAC. No CSV or PD
 The label template must contain these named objects:
 
 - `product_name` — text
-- `sku` — text
 - `barcode` — Code 128 barcode
-- `category` — text
+- `uuid` — text
 
-MedStock calls `PrintOut(quantity, 0)`, so a product with quantity `2` prints two identical labels.
+MedStock generates one UUID per physical unit in the format `SKU-DDMMYY-A0001`. A product with quantity `2` is printed one label at a time with sequential UUIDs such as `A0001` and `A0002`.
+
+The latest running number is stored per SKU and stock date in browser local storage. A database should replace this storage before multiple computers are allowed to generate labels.
 
 ## Configuration
 
