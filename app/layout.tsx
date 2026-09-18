@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MedStock — Inventory",
-  description: "Simple, reliable medical inventory management",
+  title: "MedStock — Dashboard",
+  description: "Medical inventory movement and barcode operations dashboard",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
