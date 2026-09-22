@@ -57,7 +57,7 @@ export function DashboardDemo() {
       <header className={styles.header}>
         <div className={styles.brand}><span>MS</span><div><strong>MedStock</strong><small>Analytics demo</small></div></div>
         <nav><button className={activeTab === "overview" ? styles.activeTab : ""} onClick={() => setActiveTab("overview")}><IconChartBar size={18} /> Overview</button><button className={activeTab === "log" ? styles.activeTab : ""} onClick={() => setActiveTab("log")}><IconClipboardList size={18} /> Log_Data</button></nav>
-        <div className={styles.headerRight}><span className={styles.demoBadge}>DEMO</span><Link href="/inventory"><strong>MedStock</strong></Link></div>
+        <div className={styles.headerRight}><span className={styles.demoBadge}>DEMO</span><Link href="/create-barcode"><strong>Create Barcode</strong></Link></div>
       </header>
 
       <div className={styles.content}>

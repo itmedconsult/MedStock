@@ -1,3 +1,5 @@
+import { resolveProductImage } from "@/lib/product-images";
+
 type SheetProduct = {
   sku?: unknown;
   name?: unknown;
@@ -56,7 +58,7 @@ export async function GET() {
       category: typeof product.category === "string" && product.category.trim() ? product.category.trim() : "Medical Stock",
       unit: typeof product.unit === "string" && product.unit.trim() ? product.unit.trim() : "units",
       trackMode: typeof product.trackMode === "string" ? product.trackMode.trim() : "",
-      image: typeof product.imageUrl === "string" && product.imageUrl.trim() ? product.imageUrl.trim() : undefined,
+      image: resolveProductImage(requiredText(product.name, "a product name"), product.imageUrl),
       date: requiredText(product.stockDate, "a stock date"),
     }));
 
