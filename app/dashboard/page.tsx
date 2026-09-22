@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { DashboardDemo } from "./_components/dashboard-demo";
+import { Dashboard } from "./_components/dashboard";
 
 export const metadata: Metadata = {
-  title: "Dashboard Demo — MedStock",
-  description: "Inventory movement and transaction dashboard demo",
+  title: "Dashboard — MedStock",
+  description: "Live inventory movement and transaction dashboard",
 };
 
 export default function DashboardPage() {
-  return <DashboardDemo />;
+  return <Dashboard />;
 }
