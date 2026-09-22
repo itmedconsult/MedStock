@@ -1,4 +1,4 @@
-import type { DailyMovement } from "../_lib/demo-data";
+import type { DailyMovement } from "../_lib/dashboard-data";
 import styles from "../dashboard.module.css";
 
 export function MovementChart({ data }: { data: DailyMovement[] }) {

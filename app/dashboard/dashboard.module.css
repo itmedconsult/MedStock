@@ -34,7 +34,7 @@
 .header nav .activeTab { color: var(--dash-green); }
 .header nav .activeTab::after { background: var(--dash-green); }
 .headerRight { justify-content: flex-end; gap: 12px; }
-.demoBadge { padding: 5px 8px; border: 1px solid #eadbb6; border-radius: 7px; color: #8e6d2b; background: #fff8e8; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.liveBadge { padding: 5px 8px; border: 1px solid #b9dfd2; border-radius: 7px; color: #176a58; background: #eaf8f2; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
 .headerRight a { gap: 7px; padding: 9px 12px; border: 1px solid #d8e0dc; border-radius: 10px; color: var(--dash-ink); background: white; font-size: 11px; font-weight: 700; text-decoration: none; }
 .headerRight a strong { color: var(--dash-green); font-size: 10px; letter-spacing: -.1px; }
 
@@ -139,7 +139,7 @@
 @media (max-width: 640px) {
   .content { width: calc(100% - 28px); padding-top: 28px; }
   .header { gap: 10px; padding-right: 14px; padding-left: 14px; }
-  .brand small, .demoBadge { display: none; }
+  .brand small, .liveBadge { display: none; }
   .titleRow { align-items: flex-start; flex-direction: column; }
   .syncBlock { width: 100%; justify-items: start; }
   .stats { grid-template-columns: 1fr; }

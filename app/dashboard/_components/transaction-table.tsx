@@ -1,4 +1,4 @@
-import type { StockTransaction } from "../_lib/demo-data";
+import type { StockTransaction } from "../_lib/dashboard-data";
 import { IconSearch } from "@tabler/icons-react";
 import styles from "../dashboard.module.css";
 
@@ -45,7 +45,7 @@ export function TransactionTable({ transactions, query, typeFilter, onQueryChang
         </table>
         {!filtered.length && <div className={styles.noResults}>No transactions match this filter.</div>}
       </div>
-      <footer><span>Showing {filtered.length} of {transactions.length} transactions</span><span>Demo data derived from the current product list</span></footer>
+      <footer><span>Showing {filtered.length} of {transactions.length} transactions</span><span>Live data from Google Sheets · Log Data</span></footer>
     </section>
   );
 }
