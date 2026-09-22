@@ -17,6 +17,7 @@ import {
   type DashboardData,
 } from "../_lib/dashboard-data";
 import { MovementChart } from "./movement-chart";
+import { InventoryTable } from "./inventory-table";
 import { TransactionTable } from "./transaction-table";
 import styles from "../dashboard.module.css";
 
@@ -32,7 +33,7 @@ export function Dashboard() {
   const [data, setData] = useState<DashboardData>(EMPTY_DASHBOARD);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "log">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "inventory" | "log">("overview");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | "IN" | "OUT">("ALL");
 
@@ -70,13 +71,13 @@ export function Dashboard() {
     <main className={styles.dashboard}>
       <header className={styles.header}>
         <div className={styles.brand}><span>MS</span><div><strong>MedStock</strong><small>Google Sheets live</small></div></div>
-        <nav><button className={activeTab === "overview" ? styles.activeTab : ""} onClick={() => setActiveTab("overview")}><IconChartBar size={18} /> Overview</button><button className={activeTab === "log" ? styles.activeTab : ""} onClick={() => setActiveTab("log")}><IconClipboardList size={18} /> Log Data</button></nav>
+        <nav><button className={activeTab === "overview" ? styles.activeTab : ""} onClick={() => setActiveTab("overview")}><IconChartBar size={18} /> Overview</button><button className={activeTab === "inventory" ? styles.activeTab : ""} onClick={() => setActiveTab("inventory")}><IconPackage size={18} /> Inventory</button><button className={activeTab === "log" ? styles.activeTab : ""} onClick={() => setActiveTab("log")}><IconClipboardList size={18} /> Log Data</button></nav>
         <div className={styles.headerRight}><span className={styles.liveBadge}>LIVE</span><Link href="/import"><strong>Import</strong></Link><Link href="/create-barcode"><strong>Create Barcode</strong></Link></div>
       </header>
 
       <div className={styles.content}>
         <section className={styles.titleRow}>
-          <div><p>Inventory intelligence</p><h1>{activeTab === "overview" ? "Stock movement overview" : "Log Data transactions"}</h1><span>{activeTab === "overview" ? "Live stock and movement data from MedStock Google Sheets." : "Movement history recorded in the Log Data sheet."}</span></div>
+          <div><p>Inventory intelligence</p><h1>{activeTab === "overview" ? "Stock movement overview" : activeTab === "inventory" ? "Physical inventory" : "Log Data transactions"}</h1><span>{activeTab === "overview" ? "Live stock and movement data from MedStock Google Sheets." : activeTab === "inventory" ? "Barcode-level stock recorded in the Inventory sheet." : "Movement history recorded in the Log Data sheet."}</span></div>
           <div className={styles.syncBlock}><button onClick={() => void loadDashboard()} disabled={state === "loading"}><IconRefresh className={state === "loading" ? styles.spinning : ""} size={17} /> Refresh data</button><small>{data.updatedAt ? `Updated ${new Date(data.updatedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : "Waiting for Google Sheets"}</small></div>
         </section>
 
@@ -105,7 +106,7 @@ export function Dashboard() {
                   <article className={styles.explainerCard}><span><IconDatabase size={25} /></span><p>Data source</p><h2>Connected to Google Sheets</h2><p>Products, physical inventory and movement history are loaded from the MedStock workbook whenever this dashboard is refreshed.</p><div><strong>Sheets</strong><span>Product List · Inventory · Log Data</span></div><div><strong>Waiting for import</strong><span>{data.waitingForImport} barcode{data.waitingForImport === 1 ? "" : "s"}</span></div><div><strong>Stock locations</strong><span>{locations}</span></div></article>
                 </section>
               </>
-            ) : <TransactionTable transactions={data.transactions} query={query} typeFilter={typeFilter} onQueryChange={setQuery} onTypeChange={setTypeFilter} />}
+            ) : activeTab === "inventory" ? <InventoryTable inventory={data.inventory} /> : <TransactionTable transactions={data.transactions} query={query} typeFilter={typeFilter} onQueryChange={setQuery} onTypeChange={setTypeFilter} />}
           </>
         )}
       </div>

@@ -61,7 +61,7 @@
 .stats strong { margin-top: 4px; font-size: 28px; line-height: 1; }
 .stats span { overflow: hidden; color: #929e9a; font-size: 10px; white-space: nowrap; text-overflow: ellipsis; }
 
-.chartCard, .activityCard, .explainerCard, .logPanel, .errorState { border: 1px solid #dfe6e2; border-radius: 19px; background: white; box-shadow: 0 8px 26px rgba(28,62,54,.04); }
+.chartCard, .activityCard, .explainerCard, .logPanel, .inventoryPanel, .errorState { border: 1px solid #dfe6e2; border-radius: 19px; background: white; box-shadow: 0 8px 26px rgba(28,62,54,.04); }
 .chartCard { padding: 24px 25px 21px; }
 .panelHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .panelHeading h2, .explainerCard h2 { margin: 0; font-size: 18px; letter-spacing: -.4px; }
@@ -123,6 +123,26 @@
 .stockIn { color: #22705b; background: #e5f3ed; }.stockOut { color: #ab5d30; background: #faebe0; }
 .noResults { padding: 60px 20px; color: #899691; font-size: 11px; text-align: center; }
 .logPanel footer { display: flex; justify-content: space-between; gap: 15px; padding: 12px 18px; border-top: 1px solid #e7ece9; color: #8f9b97; background: #fbfcfb; font-size: 9px; }
+.inventoryPanel { overflow: hidden; }
+.inventoryToolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 17px 19px; border-bottom: 1px solid #e7ece9; }
+.inventoryFilters { display: flex; gap: 10px; }
+.inventoryFilters label { display: grid; gap: 4px; }
+.inventoryFilters label > span { color: #8b9893; font-size: 8px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; }
+.inventoryFilters select { height: 38px; min-width: 128px; padding: 0 30px 0 10px; border: 1px solid #d9e2de; border-radius: 10px; outline: 0; color: #52635e; background: #fafbfa; font-size: 10px; }
+.inventoryTable { width: 100%; border-collapse: collapse; }
+.inventoryTable th { padding: 12px 16px; color: #87938f; background: #f8faf9; font-size: 8px; letter-spacing: .8px; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.inventoryTable td { padding: 14px 16px; border-top: 1px solid #edf1ef; color: #52635e; font-size: 10px; white-space: nowrap; }
+.inventoryTable td strong, .inventoryTable td small { display: block; }
+.inventoryTable td strong { max-width: 260px; overflow: hidden; color: var(--dash-ink); font-size: 10px; text-overflow: ellipsis; }
+.inventoryTable td small { margin-top: 3px; color: #95a09c; font-size: 8px; }
+.inventoryTable code { color: #547068; font: 9px Consolas, monospace; }
+.statusIn, .statusOut, .containerOpen, .containerFull, .trackMode { display: inline-block; margin-top: 4px; padding: 4px 7px; border-radius: 7px; font-size: 8px; font-weight: 800; }
+.statusIn { color: #22705b; background: #e5f3ed; }
+.statusOut { color: #a65446; background: #f9e9e5; }
+.containerOpen { color: #9a5b2e; background: #faecdf; }
+.containerFull { color: #3e668f; background: #e7eff8; }
+.trackMode { margin-top: 0; color: #67558b; background: #eee9f6; }
+.inventoryPanel footer { display: flex; justify-content: space-between; gap: 15px; padding: 12px 18px; border-top: 1px solid #e7ece9; color: #8f9b97; background: #fbfcfb; font-size: 9px; }
 .errorState { display: grid; justify-items: center; padding: 70px 25px; color: #9b5b51; text-align: center; }
 .errorState h2 { margin: 15px 0 5px; color: var(--dash-ink); }.errorState p { margin: 0 0 18px; font-size: 11px; }.errorState button { padding: 9px 14px; border: 0; border-radius: 9px; color: white; background: var(--dash-green); cursor: pointer; }
 
@@ -149,6 +169,9 @@
   .barPair { gap: 2px; }
   .legend { gap: 8px; flex-direction: column; }
   .logToolbar { align-items: stretch; flex-direction: column; }
+  .inventoryToolbar { align-items: stretch; flex-direction: column; }
+  .inventoryFilters { display: grid; grid-template-columns: 1fr; }
+  .inventoryFilters select { width: 100%; }
   .filterGroup button { flex: 1; }
-  .logPanel footer { flex-direction: column; }
+  .logPanel footer, .inventoryPanel footer { flex-direction: column; }
 }
