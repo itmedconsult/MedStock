@@ -840,6 +840,45 @@
       "sourceHost": "mountainside-medical.com",
       "originalSize": "700x700",
       "reviewStatus": "visually-reviewed"
+    },
+    {
+      "query": "Transamin Injection 250mg/5ml",
+      "skus": [
+        "TRANS-001"
+      ],
+      "title": "Transamin Injection 250mg/5ml",
+      "imageUrl": "https://inwfile.com/s-gg/0mscqr.jpg",
+      "sourcePage": "https://www.nuyyadee.com/product/78/ทรานซามิน-ฝ้า-กระ-จุดด่างดำ-ของแท้-อยไทย",
+      "sourceHost": "nuyyadee.com",
+      "originalSize": "4112x3556",
+      "reviewStatus": "related-image-unverified-product-match",
+      "reviewNotes": [
+        "Catalog name is Transmin 1; the closest verified clinic-stock reference is Transamin Injection 250mg/5ml."
+      ]
+    },
+    {
+      "query": "HP Vitaran product box",
+      "skus": [
+        "VITARAN"
+      ],
+      "title": "HP Vitaran",
+      "imageUrl": "https://web.tradekorea.com/product/421/2320421/HP_Vitaran_2.png",
+      "sourcePage": "https://www.tradekorea.com/product/detail/P846866/HP-Vitaran.html",
+      "sourceHost": "tradekorea.com",
+      "originalSize": "729x730",
+      "reviewStatus": "verified-product-match"
+    },
+    {
+      "query": "Ejal 40 product box",
+      "skus": [
+        "EJAL40"
+      ],
+      "title": "Ejal 40 Bio-Revitalizing Gel",
+      "imageUrl": "https://www.aqpro.no/cdn/shop/files/ejal40-1x20ml.webp?v=1765467150",
+      "sourcePage": "https://www.aqpro.no/products/ejal-40-2-ml",
+      "sourceHost": "aqpro.no",
+      "originalSize": "600x600",
+      "reviewStatus": "verified-product-match"
     }
   ],
   "failures": [],
