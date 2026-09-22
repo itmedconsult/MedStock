@@ -1,0 +1,9 @@
+.nav { border-bottom: 1px solid #dce4e0; background: #fff; }
+.inner { width: min(1540px, calc(100% - 48px)); min-height: 70px; display: flex; align-items: center; gap: 25px; margin: 0 auto; }
+.label { color: #94a09c; font-size: 8px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
+.links { align-self: stretch; display: flex; gap: 5px; }
+.links a { position: relative; display: flex; align-items: center; gap: 9px; padding: 0 16px; color: #788781; text-decoration: none; }
+.links a::after { position: absolute; right: 13px; bottom: -1px; left: 13px; height: 2px; border-radius: 2px; background: transparent; content: ""; }
+.links a > span { display: grid; gap: 2px; }.links strong { font-size: 10px; }.links small { color: #9aa5a1; font-size: 8px; }
+.links a:hover { color: #1f7565; background: #f8faf9; }.links .active { color: #1f7565; background: #f3f8f6; }.links .active::after { background: #1f7565; }.links .active small { color: #72a094; }
+@media (max-width: 760px) { .inner { width: 100%; min-height: auto; display: block; }.label { display: none; }.links { width: 100%; }.links a { min-width: 0; flex: 1; justify-content: center; padding: 13px 6px; }.links a > span { display: block; }.links small { display: none; }.links a::after { right: 8px; left: 8px; } }

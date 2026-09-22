@@ -10,6 +10,7 @@ import {
   IconDatabase,
   IconPackage,
   IconRefresh,
+  IconUpload,
 } from "@tabler/icons-react";
 import {
   createDailyMovements,
@@ -71,7 +72,7 @@ export function Dashboard() {
       <header className={styles.header}>
         <div className={styles.brand}><span>MS</span><div><strong>MedStock</strong><small>Google Sheets live</small></div></div>
         <nav><button className={activeTab === "overview" ? styles.activeTab : ""} onClick={() => setActiveTab("overview")}><IconChartBar size={18} /> Overview</button><button className={activeTab === "inventory" ? styles.activeTab : ""} onClick={() => setActiveTab("inventory")}><IconPackage size={18} /> Inventory</button><button className={activeTab === "log" ? styles.activeTab : ""} onClick={() => setActiveTab("log")}><IconClipboardList size={18} /> Log Data</button></nav>
-        <div className={styles.headerRight}><span className={styles.liveBadge}>LIVE</span><Link href="/create-barcode"><strong>Create Barcode</strong></Link></div>
+        <div className={styles.headerRight}><span className={styles.liveBadge}>LIVE</span><Link href="/import"><strong>Import</strong></Link><Link href="/create-barcode"><strong>Create Barcode</strong></Link></div>
       </header>
 
       <div className={styles.content}>
