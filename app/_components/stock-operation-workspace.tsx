@@ -63,6 +63,41 @@ function cutResult(item: QueueItem) {
   return { errors, quantity, quantityAfter, typeAfter, statusAfter };
 }
 
+function stockQueueErrors(items: QueueItem[], inventory: InventoryItem[], branch: Branch, isCheck: boolean) {
+  const itemResults = new Map(items.map((item) => [item.id, isCheck ? checkResult(item) : cutResult(item)]));
+  const result = new Map<string, string[]>();
+  const queuedIds = new Set<string>();
+  items.forEach((item) => {
+    const errors = [...(itemResults.get(item.id)?.errors ?? [])];
+    if (queuedIds.has(item.id)) errors.push("DUPLICATE BARCODE");
+    queuedIds.add(item.id);
+    if (item.branch !== branch) errors.push(`WRONG BRANCH: ${item.branch}`);
+    result.set(item.id, errors);
+  });
+
+  const finalOpen = new Map<string, string[]>();
+  inventory.forEach((inventoryItem) => {
+    const queued = items.find((item) => item.id === inventoryItem.id);
+    const calculated = queued ? itemResults.get(queued.id) : null;
+    const quantity = calculated ? calculated.quantityAfter : inventoryItem.quantity;
+    const type = calculated ? calculated.typeAfter : inventoryItem.containerType;
+    if (quantity > 0 && type === "OPEN") {
+      const key = `${inventoryItem.sku}|${inventoryItem.location}`;
+      finalOpen.set(key, [...(finalOpen.get(key) ?? []), inventoryItem.id]);
+    }
+  });
+  items.forEach((item) => {
+    const key = `${item.sku}|${item.branch}`;
+    const openIds = finalOpen.get(key) ?? [];
+    if (openIds.length > 1) result.set(item.id, [...(result.get(item.id) ?? []), `ONLY ONE OPEN: ${openIds.join(", ")}`]);
+    if (!isCheck && item.typeBefore === "FULL" && item.cutMode === "PARTIAL") {
+      const otherOpen = inventory.filter((inventoryItem) => inventoryItem.id !== item.id && inventoryItem.sku === item.sku && inventoryItem.location === item.branch && inventoryItem.containerType === "OPEN" && (itemResults.get(inventoryItem.id)?.quantityAfter ?? inventoryItem.quantity) > 0);
+      if (otherOpen.length) result.set(item.id, [...(result.get(item.id) ?? []), `USE EXISTING OPEN FIRST: ${otherOpen.map((open) => open.id).join(", ")}`]);
+    }
+  });
+  return result;
+}
+
 export function StockOperationWorkspace({ operation }: { operation: Operation }) {
   const isCheck = operation === "check";
   const barcodeRef = useRef<HTMLInputElement>(null);
@@ -78,12 +113,12 @@ export function StockOperationWorkspace({ operation }: { operation: Operation })
   const [cutReason, setCutReason] = useState<CutReason>("SALE");
   const [cutMode, setCutMode] = useState<CutMode>("PARTIAL");
   const [cutQuantity, setCutQuantity] = useState(1);
-  const [autoAdd, setAutoAdd] = useState(false);
+  const [autoAdd, setAutoAdd] = useState(true);
   const [validation, setValidation] = useState("Scan a barcode to begin");
   const [validationType, setValidationType] = useState<"idle" | "ready" | "error">("idle");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [batchStatus, setBatchStatus] = useState("READY TO SCAN — CHOOSE BRANCH FIRST");
+  const [batchStatus, setBatchStatus] = useState("AUTO ADD ON — READY TO SCAN");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadSource = async () => {
@@ -98,42 +133,13 @@ export function StockOperationWorkspace({ operation }: { operation: Operation })
   useEffect(() => { void loadSource(); }, []);
 
   const derived = useMemo(() => new Map(queue.map((item) => [item.id, isCheck ? checkResult(item) : cutResult(item)])), [isCheck, queue]);
-  const rowErrors = useMemo(() => {
-    const result = new Map<string, string[]>();
-    const queuedIds = new Set<string>();
-    queue.forEach((item) => {
-      const errors = [...(derived.get(item.id)?.errors ?? [])];
-      if (queuedIds.has(item.id)) errors.push("DUPLICATE BARCODE");
-      queuedIds.add(item.id);
-      if (item.branch !== branch) errors.push(`WRONG BRANCH: ${item.branch}`);
-      result.set(item.id, errors);
-    });
-
-    const finalOpen = new Map<string, string[]>();
-    (source?.inventory ?? []).forEach((inventoryItem) => {
-      const queued = queue.find((item) => item.id === inventoryItem.id);
-      const calculated = queued ? derived.get(queued.id) : null;
-      const quantity = calculated ? calculated.quantityAfter : inventoryItem.quantity;
-      const type = calculated ? calculated.typeAfter : inventoryItem.containerType;
-      if (quantity > 0 && type === "OPEN") {
-        const key = `${inventoryItem.sku}|${inventoryItem.location}`;
-        finalOpen.set(key, [...(finalOpen.get(key) ?? []), inventoryItem.id]);
-      }
-    });
-    queue.forEach((item) => {
-      const key = `${item.sku}|${item.branch}`;
-      const openIds = finalOpen.get(key) ?? [];
-      if (openIds.length > 1) result.set(item.id, [...(result.get(item.id) ?? []), `ONLY ONE OPEN: ${openIds.join(", ")}`]);
-      if (!isCheck && item.typeBefore === "FULL" && item.cutMode === "PARTIAL") {
-        const otherOpen = (source?.inventory ?? []).filter((inventoryItem) => inventoryItem.id !== item.id && inventoryItem.sku === item.sku && inventoryItem.location === item.branch && inventoryItem.containerType === "OPEN" && (derived.get(inventoryItem.id)?.quantityAfter ?? inventoryItem.quantity) > 0);
-        if (otherOpen.length) result.set(item.id, [...(result.get(item.id) ?? []), `USE EXISTING OPEN FIRST: ${otherOpen.map((open) => open.id).join(", ")}`]);
-      }
-    });
-    return result;
-  }, [branch, derived, isCheck, queue, source]);
+  const rowErrors = useMemo(() => stockQueueErrors(queue, source?.inventory ?? [], branch, isCheck), [branch, isCheck, queue, source]);
 
   const invalidRows = queue.filter((item) => (rowErrors.get(item.id)?.length ?? 0) > 0).length;
   const allSelected = queue.length > 0 && selected.size === queue.length;
+  const selectedItems = useMemo(() => queue.filter((item) => selected.has(item.id)), [queue, selected]);
+  const selectedRowErrors = useMemo(() => stockQueueErrors(selectedItems, source?.inventory ?? [], branch, isCheck), [branch, isCheck, selectedItems, source]);
+  const selectedInvalidRows = selectedItems.filter((item) => (selectedRowErrors.get(item.id)?.length ?? 0) > 0).length;
 
   const clearInput = () => {
     setBarcode(""); setScanned(null); setNote(""); setValidation("Scan a barcode to begin"); setValidationType("idle");
@@ -164,7 +170,7 @@ export function StockOperationWorkspace({ operation }: { operation: Operation })
     };
     const calculation = isCheck ? checkResult(next) : cutResult(next);
     if (calculation.errors.length) throw new Error(calculation.errors.join(" / "));
-    setQueue((current) => [...current, next]); setBatchStatus(`QUEUED: ${item.id} — REVIEW BEFORE ${isCheck ? "CONFIRM CHECK" : "CUT STOCK"}`); clearInput();
+    setQueue((current) => [...current, next]); setSelected((current) => new Set(current).add(item.id)); setBatchStatus(`QUEUED: ${item.id} — REVIEW BEFORE ${isCheck ? "CONFIRM CHECK" : "CUT STOCK"}`); clearInput();
   };
 
   const handleScan = (event: FormEvent) => {
@@ -190,17 +196,18 @@ export function StockOperationWorkspace({ operation }: { operation: Operation })
   };
   const updateQueue = (id: string, patch: Partial<QueueItem>) => { setQueue((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item)); setBatchStatus("QUEUE CHANGED — FINAL VALIDATION REQUIRED"); };
   const deleteSelected = () => { if (!selected.size) { setBatchStatus("SELECT QUEUE ROWS FIRST"); return; } const count = selected.size; setQueue((current) => current.filter((item) => !selected.has(item.id))); setSelected(new Set()); setBatchStatus(`REMOVED ${count} QUEUED ITEM(S)`); };
-  const clearAll = () => { setQueue([]); setSelected(new Set()); setAutoAdd(false); setBatchStatus("CANCELLED — READY FOR NEW SCAN"); clearInput(); };
+  const clearAll = () => { setQueue([]); setSelected(new Set()); setAutoAdd(true); setBatchStatus("CANCELLED — AUTO ADD ON / READY FOR NEW SCAN"); clearInput(); };
 
   const submitBatch = async () => {
-    if (!queue.length) { setBatchStatus("BLOCK: QUEUE IS EMPTY"); return; }
-    if (invalidRows) { setBatchStatus(`BLOCK: FIX ${invalidRows} INVALID ROW(S)`); return; }
-    setIsSubmitting(true); setBatchStatus(`VALIDATING ${queue.length} ITEM(S)`);
+    if (!selectedItems.length) { setBatchStatus(queue.length ? "BLOCK: SELECT AT LEAST ONE ROW" : "BLOCK: QUEUE IS EMPTY"); return; }
+    if (selectedInvalidRows) { setBatchStatus(`BLOCK: FIX ${selectedInvalidRows} INVALID SELECTED ROW(S)`); return; }
+    setIsSubmitting(true); setBatchStatus(`VALIDATING ${selectedItems.length} SELECTED ITEM(S)`);
     try {
-      const response = await fetch("/api/stock-operation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, branch, items: queue }) });
+      const response = await fetch("/api/stock-operation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, branch, items: selectedItems }) });
       const result = await response.json() as OperationResponse;
       if (!response.ok || !result.ok) throw new Error(result.error || `${isCheck ? "Check" : "Cut"} failed.`);
-      setQueue([]); setSelected(new Set()); clearInput(); setBatchStatus(`COMPLETED: ${result.batchId || operation.toUpperCase()} — ${result.processedCount ?? queue.length} ITEM(S)`); await loadSource();
+      const processedIds = new Set(selectedItems.map((item) => item.id));
+      setQueue((current) => current.filter((item) => !processedIds.has(item.id))); setSelected(new Set()); clearInput(); setBatchStatus(`COMPLETED: ${result.batchId || operation.toUpperCase()} — ${result.processedCount ?? selectedItems.length} SELECTED ITEM(S)`); await loadSource();
     } catch (error) { setBatchStatus(`ERROR: ${error instanceof Error ? error.message : "Operation failed"}`); }
     finally { setIsSubmitting(false); }
   };
@@ -233,7 +240,7 @@ export function StockOperationWorkspace({ operation }: { operation: Operation })
         <div className={styles.queuePanel}>
           <div className={styles.queueHeading}><div><span>Pending {isCheck ? "check" : "cut"} stock queue</span><h2>Review scanned stock</h2><p>Inventory is revalidated before any stock or log record changes.</p></div><div className={styles.queueActions}><button type="button" className={styles.deleteButton} onClick={deleteSelected} disabled={!queue.length}><IconTrash size={15} /> Delete selected</button><button type="button" className={styles.clearButton} onClick={clearAll} disabled={!queue.length && !barcode}><IconX size={15} /> Cancel / clear</button></div></div>
           <div className={styles.tableScroll}><table><thead><tr><th><input aria-label="Select all rows" type="checkbox" checked={allSelected} onChange={(event) => setSelected(event.target.checked ? new Set(queue.map((item) => item.id)) : new Set())} /></th><th>Barcode</th><th>Product</th><th>Branch</th><th>Type before</th><th>Qty before</th><th>{isCheck ? "Reason / note" : "Reason"}</th><th>{isCheck ? "Actual type" : "Cut mode"}</th><th>{isCheck ? "Actual qty" : "Qty to cut"}</th><th>{isCheck ? "Difference" : "Qty after"}</th><th>Type after</th><th>Validation</th></tr></thead><tbody>{queue.map((item) => { const calculation = derived.get(item.id); const errors = rowErrors.get(item.id) ?? []; return <tr key={item.id} className={errors.length ? styles.invalidRow : ""}><td><input aria-label={`Select ${item.barcode}`} type="checkbox" checked={selected.has(item.id)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(item.id); else next.delete(item.id); return next; })} /></td><td><code>{item.barcode}</code><small>{item.sku}</small></td><td><strong>{item.productName}</strong><small>{item.trackMode} · {item.unit}</small></td><td>{item.branch}</td><td><span className={styles.typeBadge}>{item.typeBefore}</span></td><td>{item.quantityBefore}</td><td>{isCheck ? <input value={item.note} onChange={(event) => updateQueue(item.id, { note: event.target.value })} placeholder="Reason if changed" /> : <select value={item.cutReason} onChange={(event) => updateQueue(item.id, { cutReason: event.target.value as CutReason })}><option>SALE</option><option>USE</option></select>}</td><td>{isCheck ? <select value={item.actualType} onChange={(event) => updateQueue(item.id, { actualType: event.target.value as StockType })}><option>FULL</option><option>OPEN</option></select> : <select value={item.cutMode} disabled={item.trackMode === "UNIT"} onChange={(event) => updateQueue(item.id, { cutMode: event.target.value as CutMode })}><option>ALL</option><option>PARTIAL</option></select>}</td><td><input className={styles.qtyInput} type="number" min={isCheck ? 0 : .000001} step="0.000001" value={isCheck ? item.actualQuantity : item.cutMode === "ALL" ? item.quantityBefore : item.cutQuantity} disabled={!isCheck && item.cutMode === "ALL"} onChange={(event) => updateQueue(item.id, isCheck ? { actualQuantity: Number(event.target.value) } : { cutQuantity: Number(event.target.value) })} /></td><td>{calculation && ("difference" in calculation ? calculation.difference : calculation.quantityAfter)}</td><td><span className={styles.typeBadge}>{calculation?.typeAfter}</span></td><td><span className={errors.length ? styles.blockedBadge : styles.readyBadge}>{errors.length ? `BLOCK: ${errors.join(" / ")}` : "READY"}</span></td></tr>; })}</tbody></table>{!queue.length && <div className={styles.emptyQueue}><IconBarcode size={30} /><strong>No barcodes queued</strong><span>Scan an inventory barcode on the left to start.</span></div>}</div>
-          <div className={styles.batchBar}><div><small>Batch status</small><strong>{batchStatus}</strong></div><button type="button" onClick={() => void submitBatch()} disabled={!queue.length || isSubmitting || sourceState !== "ready"}>{isSubmitting ? <IconRefresh className={styles.spinning} size={18} /> : isCheck ? <IconClipboardCheck size={18} /> : <IconScissors size={18} />}{isSubmitting ? "Processing…" : isCheck ? "Confirm check" : "Cut stock"}</button></div>
+          <div className={styles.batchBar}><div><small>Batch status</small><strong>{batchStatus}</strong></div><button type="button" onClick={() => void submitBatch()} disabled={!selectedItems.length || isSubmitting || sourceState !== "ready"}>{isSubmitting ? <IconRefresh className={styles.spinning} size={18} /> : isCheck ? <IconClipboardCheck size={18} /> : <IconScissors size={18} />}{isSubmitting ? "Processing…" : isCheck ? `Confirm selected (${selectedItems.length})` : `Cut selected (${selectedItems.length})`}</button></div>
         </div>
       </section>
     </div>

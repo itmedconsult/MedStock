@@ -92,13 +92,13 @@ export function ImportWorkspace() {
   const [lot, setLot] = useState("");
   const [expiry, setExpiry] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [autoAdd, setAutoAdd] = useState(false);
+  const [autoAdd, setAutoAdd] = useState(true);
   const [scannedProduct, setScannedProduct] = useState<DashboardProduct | null>(null);
   const [validation, setValidation] = useState("Scan a barcode to begin");
   const [validationType, setValidationType] = useState<"idle" | "ready" | "error">("idle");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [batchStatus, setBatchStatus] = useState("MANUAL MODE — READY FOR SCAN");
+  const [batchStatus, setBatchStatus] = useState("AUTO ADD ON — READY FOR SCAN");
   const [isImporting, setIsImporting] = useState(false);
 
   const inventoryIds = useMemo(
@@ -116,6 +116,9 @@ export function ImportWorkspace() {
   const totalQuantity = queue.reduce((sum, item) => sum + (Number.isFinite(item.quantity) ? item.quantity : 0), 0);
   const invalidRows = queue.filter((item) => (rowErrors.get(item.barcode)?.length ?? 0) > 0).length;
   const allSelected = queue.length > 0 && selected.size === queue.length;
+  const selectedItems = useMemo(() => queue.filter((item) => selected.has(item.barcode)), [queue, selected]);
+  const selectedQuantity = selectedItems.reduce((sum, item) => sum + (Number.isFinite(item.quantity) ? item.quantity : 0), 0);
+  const selectedInvalidRows = selectedItems.filter((item) => (rowErrors.get(item.barcode)?.length ?? 0) > 0).length;
 
   const loadSource = async () => {
     setSourceState("loading");
@@ -172,6 +175,7 @@ export function ImportWorkspace() {
       trackMode: product.trackMode.toUpperCase(),
     };
     setQueue((current) => [...current, item]);
+    setSelected((current) => new Set(current).add(item.barcode));
     setBatchStatus(`QUEUED: ${parsed.barcode} — ${autoAdd ? "AUTO ADD ON" : "MANUAL ADD"} / READY FOR IMPORT`);
     clearInput();
   };
@@ -240,39 +244,40 @@ export function ImportWorkspace() {
   const clearAll = () => {
     setQueue([]);
     setSelected(new Set());
-    setAutoAdd(false);
-    setBatchStatus("CANCELLED — READY FOR NEW SCAN");
+    setAutoAdd(true);
+    setBatchStatus("CANCELLED — AUTO ADD ON / READY FOR NEW SCAN");
     clearInput();
   };
 
   const importBatch = async () => {
-    if (!queue.length) {
-      setBatchStatus("BLOCK: QUEUE IS EMPTY");
+    if (!selectedItems.length) {
+      setBatchStatus(queue.length ? "BLOCK: SELECT AT LEAST ONE ROW TO IMPORT" : "BLOCK: QUEUE IS EMPTY");
       return;
     }
     if (!receivedDate) {
       setBatchStatus("BLOCK: SELECT A RECEIVED DATE");
       return;
     }
-    if (invalidRows) {
-      setBatchStatus(`BLOCK: FIX ${invalidRows} INVALID ROW(S)`);
+    if (selectedInvalidRows) {
+      setBatchStatus(`BLOCK: FIX ${selectedInvalidRows} INVALID SELECTED ROW(S)`);
       return;
     }
 
     setIsImporting(true);
-    setBatchStatus(`VALIDATING ${queue.length} BARCODE(S), TOTAL QTY ${totalQuantity}`);
+    setBatchStatus(`VALIDATING ${selectedItems.length} SELECTED BARCODE(S), TOTAL QTY ${selectedQuantity}`);
     try {
       const response = await fetch("/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branch, receivedDate, items: queue }),
+        body: JSON.stringify({ branch, receivedDate, items: selectedItems }),
       });
       const result = await response.json() as ImportResponse;
       if (!response.ok || !result.ok) throw new Error(result.error || "Import failed.");
-      setQueue([]);
+      const importedBarcodes = new Set(selectedItems.map((item) => item.barcode));
+      setQueue((current) => current.filter((item) => !importedBarcodes.has(item.barcode)));
       setSelected(new Set());
       clearInput();
-      setBatchStatus(`COMPLETED: ${result.batchId || "IMPORT"} — ${result.importedCount ?? queue.length} BARCODE(S) IMPORTED`);
+      setBatchStatus(`COMPLETED: ${result.batchId || "IMPORT"} — ${result.importedCount ?? selectedItems.length} SELECTED BARCODE(S) IMPORTED`);
       await loadSource();
     } catch (error) {
       setBatchStatus(`ERROR: ${error instanceof Error ? error.message : "Import failed"}`);
@@ -324,7 +329,7 @@ export function ImportWorkspace() {
 
             <button className={styles.addButton} type="button" onClick={handleManualAdd} disabled={!scannedProduct || autoAdd}><IconPackageImport size={18} /> Add to queue</button>
 
-            <div className={styles.safeWorkflow}><strong>Safe workflow</strong><ol><li>Select one branch for the batch.</li><li>Scan barcode — quantity starts at 1.</li><li>Keep Auto Add off to edit lot, expiry, or bulk quantity.</li><li>Review the queue before importing.</li></ol></div>
+            <div className={styles.safeWorkflow}><strong>Safe workflow</strong><ol><li>Select one branch for the batch.</li><li>Auto Add is on by default; each valid scan is queued and selected.</li><li>Turn Auto Add off to edit lot, expiry, or bulk quantity before adding.</li><li>Only checked rows will be imported.</li></ol></div>
           </div>
 
           <div className={styles.queuePanel}>
@@ -343,7 +348,7 @@ export function ImportWorkspace() {
               {!queue.length && <div className={styles.emptyQueue}><IconBarcode size={30} /><strong>No barcodes queued</strong><span>Scan a barcode on the left to start this import batch.</span></div>}
             </div>
 
-            <div className={styles.batchBar}><div><small>Batch status</small><strong>{batchStatus}</strong></div><button type="button" onClick={() => void importBatch()} disabled={!queue.length || isImporting || sourceState !== "ready"}>{isImporting ? <IconRefresh className={styles.spinning} size={18} /> : <IconPackageImport size={18} />}{isImporting ? "Importing…" : "Import stock"}</button></div>
+            <div className={styles.batchBar}><div><small>Batch status</small><strong>{batchStatus}</strong></div><button type="button" onClick={() => void importBatch()} disabled={!selectedItems.length || isImporting || sourceState !== "ready"}>{isImporting ? <IconRefresh className={styles.spinning} size={18} /> : <IconPackageImport size={18} />}{isImporting ? "Importing…" : `Import selected (${selectedItems.length})`}</button></div>
           </div>
         </section>
       </div>
