@@ -21,6 +21,7 @@ import {
   type PrintAttemptType,
   type PrintBatch,
   type PrintBranch,
+  type ReservePrintProduct,
 } from "@/lib/print-history";
 import {
   IconBarcode,
@@ -122,6 +123,9 @@ export default function CreateBarcodePage() {
   const [printLabels, setPrintLabels] = useState<PrintLabelState[]>([]);
   const [activeBatchId, setActiveBatchId] = useState("");
   const [initialPrintStarted, setInitialPrintStarted] = useState(false);
+  const [pendingPrintProducts, setPendingPrintProducts] = useState<ReservePrintProduct[]>([]);
+  const [pendingPrintBranch, setPendingPrintBranch] = useState<OperationalPrintBranch>("Thonglor");
+  const pendingPrintRequestId = useRef("");
   const [printBatches, setPrintBatches] = useState<PrintBatch[]>([]);
   const [historyBranch, setHistoryBranch] = useState<PrintBranch>("Thonglor");
   const [selectedBatchId, setSelectedBatchId] = useState("");
@@ -195,6 +199,11 @@ export default function CreateBarcodePage() {
     [printLabels],
   );
 
+  const pendingLabelCount = useMemo(
+    () => pendingPrintProducts.reduce((total, product) => total + product.quantity, 0),
+    [pendingPrintProducts],
+  );
+
   const branchBatches = useMemo(
     () => printBatches.filter((batch) => batch.branch === historyBranch),
     [historyBranch, printBatches],
@@ -247,30 +256,27 @@ export default function CreateBarcodePage() {
     setPrintLabels([]);
     setActiveBatchId("");
     setInitialPrintStarted(false);
+    setPendingPrintProducts([]);
+    pendingPrintRequestId.current = "";
   };
 
-  const openBarcodeModal = async () => {
+  const openBarcodeModal = () => {
     if (!barcodeProducts.length) return;
+    const productsToPrint = barcodeProducts.map(({ sku, date: stockDate, quantity }) => ({
+      sku,
+      date: stockDate,
+      quantity,
+    }));
     setIsBarcodeModalOpen(true);
-    setPrintStatus("printing");
-    setPrintMessage("Reserving unique barcode numbers in Google Sheets…");
+    setPrintStatus("idle");
+    setPrintMessage("Review the label count, then click Print. No barcode has been issued yet.");
     setPrintLogs([]);
     setPrintLabels([]);
     setActiveBatchId("");
     setInitialPrintStarted(false);
-
-    try {
-      const batch = await reservePrintBatch(branch, barcodeProducts, crypto.randomUUID());
-      const labels = batch.labels;
-      setActiveBatchId(batch.id);
-      setPrintBatches((current) => [batch, ...current.filter((item) => item.id !== batch.id)]);
-      setPrintLabels(labels.map((label) => ({ ...label, status: "queued" })));
-      setPrintStatus("idle");
-      setPrintMessage(`${labels.length} ${labels.length === 1 ? "barcode is" : "barcodes are"} reserved in Google Sheets and ready to scan or print.`);
-    } catch (error) {
-      setPrintStatus("error");
-      setPrintMessage(error instanceof Error ? error.message : "Unable to reserve barcode numbers in Google Sheets.");
-    }
+    setPendingPrintProducts(productsToPrint);
+    setPendingPrintBranch(branch);
+    pendingPrintRequestId.current = crypto.randomUUID();
   };
 
   const refreshPrintHistory = async () => {
@@ -378,9 +384,22 @@ export default function CreateBarcodePage() {
   };
 
   const printWithBrother = async () => {
-    if (!activeBatchId || !printLabels.length) return;
-    setInitialPrintStarted(true);
-    await runBrotherPrint(printLabels, { batchId: activeBatchId, attemptType: "INITIAL", target: "create" });
+    if (!pendingPrintProducts.length || !pendingPrintRequestId.current) return;
+    setPrintStatus("printing");
+    setPrintMessage("Issuing barcode numbers in Google Sheets…");
+    setPrintLogs([]);
+    try {
+      const batch = await reservePrintBatch(pendingPrintBranch, pendingPrintProducts, pendingPrintRequestId.current);
+      const labels = batch.labels;
+      setActiveBatchId(batch.id);
+      setPrintBatches((current) => [batch, ...current.filter((item) => item.id !== batch.id)]);
+      setPrintLabels(labels.map((label) => ({ ...label, status: "queued" })));
+      setInitialPrintStarted(true);
+      await runBrotherPrint(labels, { batchId: batch.id, attemptType: "INITIAL", target: "create" });
+    } catch (error) {
+      setPrintStatus("error");
+      setPrintMessage(error instanceof Error ? error.message : "Unable to issue barcode numbers in Google Sheets.");
+    }
   };
 
   const reprintSelected = async () => {
@@ -503,7 +522,7 @@ export default function CreateBarcodePage() {
 
       <div className="action-dock">
         <button className="reprint-history-button" onClick={() => void openReprintModal()}><IconHistory size={20} /> Reprint labels</button>
-        <button className="generate-button" onClick={() => void openBarcodeModal()} disabled={!barcodeProducts.length}>
+        <button className="generate-button" onClick={openBarcodeModal} disabled={!barcodeProducts.length}>
           <IconBarcode size={21} /> Generate {barcodeProducts.length === 1 ? "barcode" : "barcodes"}
           {barcodeProducts.length > 0 && <span className="selection-count">{barcodeProducts.length}</span>}
         </button>
@@ -515,15 +534,19 @@ export default function CreateBarcodePage() {
           <div className="barcode-modal multi-barcode-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="barcode-modal-title">
             <button className="modal-close" onClick={closeBarcodeModal} aria-label="Close generated barcodes" disabled={printStatus === "printing"}><IconX size={20} /></button>
             <div className="success-icon"><IconCheck size={22} /></div>
-            <p className="section-kicker">{printLabels.length ? "Barcodes reserved" : "Preparing barcodes"}</p>
-            <h2 id="barcode-modal-title">{printLabels.length || barcodeProducts.length} {(printLabels.length || barcodeProducts.length) === 1 ? "label" : "labels"}</h2>
-            <p className="barcode-help">Only UUIDs successfully reserved in Google Sheets are displayed. Every visible barcode is safe to scan before or after printing.</p>
-            <div className="batch-context"><span><IconMapPin size={15} /> {branch}</span>{activeBatchId && <code>{activeBatchId}</code>}</div>
+            <p className="section-kicker">{printLabels.length ? "Barcodes issued" : "Ready to print"}</p>
+            <h2 id="barcode-modal-title">{printLabels.length || pendingLabelCount} {(printLabels.length || pendingLabelCount) === 1 ? "label" : "labels"}</h2>
+            <p className="barcode-help">{printLabels.length ? "These UUIDs were issued in Google Sheets when printing started and are safe to scan or retry." : "No UUID or BC_Registry row will be created until you click Print to Brother."}</p>
+            <div className="batch-context"><span><IconMapPin size={15} /> {pendingPrintBranch}</span>{activeBatchId && <code>{activeBatchId}</code>}</div>
             <div className="printer-chip">
               <span className="printer-dot" />
               <div><strong>{brotherPrinterConfig.model}</strong><small>{brotherPrinterConfig.connection} direct print</small></div>
             </div>
             <div className="barcode-labels">
+              {!printLabels.length && pendingPrintProducts.map((item) => {
+                const product = products.find((product) => product.sku === item.sku);
+                return <article className="barcode-label" key={item.sku}><div className="barcode-label-heading"><div><h3>{product?.name ?? item.sku}</h3><p>{item.sku} · {item.date}</p></div><span>{item.quantity} {item.quantity === 1 ? "label" : "labels"}</span></div></article>;
+              })}
               {printLabels.map((label) => {
                 const product = products.find((item) => item.sku === label.sku);
                 return (
@@ -592,10 +615,10 @@ export default function CreateBarcodePage() {
               <button
                 className="print-button"
                 onClick={() => initialPrintStarted ? void runBrotherPrint(retryableLabels, { batchId: activeBatchId, attemptType: "RETRY", target: "create" }) : void printWithBrother()}
-                disabled={printStatus === "printing" || !activeBatchId || !printLabels.length || (initialPrintStarted && retryableLabels.length === 0)}
+                disabled={printStatus === "printing" || (!initialPrintStarted && !pendingPrintProducts.length) || (initialPrintStarted && (!activeBatchId || retryableLabels.length === 0))}
               >
                 {printStatus === "printing"
-                  ? activeBatchId ? "Sending to printer…" : "Reserving barcodes…"
+                  ? activeBatchId ? "Sending to printer…" : "Issuing barcodes…"
                   : !initialPrintStarted
                     ? "Print to Brother QL-820NWB"
                     : retryableLabels.length > 0

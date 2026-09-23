@@ -2,6 +2,7 @@ const MEDSTOCK_BARCODE_API = {
   REGISTRY_SHEET: "BC_Registry",
   PRINT_LOG_SHEET: "BC_Print_Log",
   PRODUCT_SHEET: "Product List",
+  TIME_ZONE: "Asia/Bangkok",
   MAX_LABELS: 500,
   REGISTRY_HEADERS: [
     "Issued At", "Batch ID", "Barcode", "SKU", "Product Name", "Barcode Date",
@@ -32,6 +33,9 @@ function medStockBarcodeDispatch_(body, ss) {
 }
 
 function medStockBarcodeEnsureStructure_(ss) {
+  if (ss.getSpreadsheetTimeZone() !== MEDSTOCK_BARCODE_API.TIME_ZONE) {
+    ss.setSpreadsheetTimeZone(MEDSTOCK_BARCODE_API.TIME_ZONE);
+  }
   const registry = ss.getSheetByName(MEDSTOCK_BARCODE_API.REGISTRY_SHEET);
   if (!registry) throw new Error("BC_Registry is missing.");
   if (registry.getMaxColumns() < MEDSTOCK_BARCODE_API.REGISTRY_HEADERS.length) {
@@ -48,6 +52,7 @@ function medStockBarcodeEnsureStructure_(ss) {
   });
   registry.getRange(1, 13, 1, 2).setValues([["Branch", "Source"]]);
   registry.getRange(1, 12, 1, 1).copyTo(registry.getRange(1, 13, 1, 2), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  registry.getRange("A:A").setNumberFormat("dd/MM/yyyy HH:mm:ss");
 
   let log = ss.getSheetByName(MEDSTOCK_BARCODE_API.PRINT_LOG_SHEET);
   if (!log) {
@@ -66,6 +71,7 @@ function medStockBarcodeEnsureStructure_(ss) {
       if (String(logHeaders[index] || "").trim() !== header) throw new Error("BC_Print_Log header changed: " + header);
     });
   }
+  log.getRange("A:A").setNumberFormat("dd/MM/yyyy HH:mm:ss");
   SpreadsheetApp.flush();
   return { registry: registry, log: log };
 }
