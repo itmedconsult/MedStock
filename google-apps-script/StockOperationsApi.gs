@@ -3,12 +3,21 @@ const MEDSTOCK_STOCK_API = {
   INVENTORY_SHEET: "Inventory",
   LOG_SHEET: "Log Data",
   REGISTRY_SHEET: "BC_Registry",
+  TIME_ZONE: "Asia/Bangkok",
   MAX_ITEMS: 100,
   INVENTORY_COLUMNS: 22,
   LOG_COLUMNS: 18
 };
 
 function medStockStockOperationDispatch_(body, ss) {
+  if (["importStockBatch", "checkStockBatch", "cutStockBatch"].indexOf(body.action) !== -1
+      && ss.getSpreadsheetTimeZone() !== MEDSTOCK_STOCK_API.TIME_ZONE) {
+    ss.setSpreadsheetTimeZone(MEDSTOCK_STOCK_API.TIME_ZONE);
+  }
+  if (["importStockBatch", "checkStockBatch", "cutStockBatch"].indexOf(body.action) !== -1) {
+    const logSheet = ss.getSheetByName(MEDSTOCK_STOCK_API.LOG_SHEET);
+    if (logSheet) logSheet.getRange("A:A").setNumberFormat("dd/MM/yyyy HH:mm:ss");
+  }
   if (body.action === "importStockBatch") return medStockImportBatch_(body, ss);
   if (body.action === "checkStockBatch") return medStockCheckStockBatch_(body, ss);
   if (body.action === "cutStockBatch") return medStockCutStockBatch_(body, ss);
