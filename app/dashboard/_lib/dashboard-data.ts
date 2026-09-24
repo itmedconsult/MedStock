@@ -4,6 +4,8 @@ export type DashboardProduct = {
   category: string;
   unit: string;
   trackMode: string;
+  packageUnit?: string;
+  unitsPerPack?: number;
 };
 
 export type InventoryItem = {
@@ -16,6 +18,8 @@ export type InventoryItem = {
   quantity: number;
   containerType: string;
   trackMode: string;
+  packageUnit?: string;
+  unitsPerPack?: number;
 };
 
 export type StockTransaction = {
