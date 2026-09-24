@@ -6,6 +6,8 @@ type SheetProduct = {
   category?: unknown;
   unit?: unknown;
   trackMode?: unknown;
+  packageUnit?: unknown;
+  unitsPerPack?: unknown;
   imageUrl?: unknown;
   stockDate?: unknown;
 };
@@ -58,6 +60,8 @@ export async function GET() {
       category: typeof product.category === "string" && product.category.trim() ? product.category.trim() : "Medical Stock",
       unit: typeof product.unit === "string" && product.unit.trim() ? product.unit.trim() : "units",
       trackMode: typeof product.trackMode === "string" ? product.trackMode.trim() : "",
+      packageUnit: typeof product.packageUnit === "string" ? product.packageUnit : "",
+      unitsPerPack: Number(product.unitsPerPack) || 0,
       image: resolveProductImage(requiredText(product.name, "a product name"), product.imageUrl),
       date: requiredText(product.stockDate, "a stock date"),
     }));

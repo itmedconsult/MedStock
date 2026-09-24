@@ -142,7 +142,7 @@ function medStockBarcodeReserve_(body, ss) {
         const barcode = item.sku + "-" + dateCode + "-" + runCode;
         output.push([
           now, batchId, barcode, item.sku, product.name, date, runCode,
-          product.unit || "units", product.trackMode || "", "ISSUED",
+          product.packageUnit || product.unit || "units", product.trackMode || "", "ISSUED",
           requestId, snapshot, branch, "WEB"
         ]);
         labels.push({ uuid: barcode, sku: item.sku, name: product.name, date: item.stockDate });
