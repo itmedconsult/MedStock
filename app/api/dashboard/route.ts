@@ -45,6 +45,8 @@ function product(value: unknown): DashboardProduct | null {
     category: text(item.category, "Medical Stock"),
     unit: text(item.unit, "units"),
     trackMode: text(item.trackMode).toUpperCase(),
+    packageUnit: text(item.packageUnit),
+    unitsPerPack: number(item.unitsPerPack),
   };
 }
 
@@ -63,6 +65,8 @@ function inventoryItem(value: unknown): InventoryItem | null {
     quantity: number(item.quantity),
     containerType: text(item.containerType).toUpperCase(),
     trackMode: text(item.trackMode).toUpperCase(),
+    packageUnit: text(item.packageUnit),
+    unitsPerPack: number(item.unitsPerPack),
   };
 }
 

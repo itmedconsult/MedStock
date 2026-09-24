@@ -80,7 +80,7 @@ function medStockImportBatch_(body, ss) {
 
     const products = {};
     if (productSheet.getLastRow() > 1) {
-      productSheet.getRange(2, 1, productSheet.getLastRow() - 1, 12).getDisplayValues().forEach(function(row) {
+      productSheet.getRange(2, 1, productSheet.getLastRow() - 1, 14).getDisplayValues().forEach(function(row) {
         const sku = String(row[0] || "").trim().toUpperCase();
         if (!sku || String(row[7] || "").trim().toUpperCase() !== "YES") return;
         products[sku] = {
@@ -89,7 +89,9 @@ function medStockImportBatch_(body, ss) {
           name: String(row[3] || "").trim(),
           unit: String(row[4] || "").trim(),
           trackMode: String(row[5] || "").trim().toUpperCase(),
-          stockGroup: String(row[8] || sku.split("-")[0]).trim().toUpperCase()
+          stockGroup: String(row[8] || sku.split("-")[0]).trim().toUpperCase(),
+          packageUnit: String(row[12] || "").trim(),
+          unitsPerPack: Number(row[13]) || 0
         };
       });
     }
@@ -135,6 +137,7 @@ function medStockImportBatch_(body, ss) {
       if (registeredBranch && registeredBranch !== branch) throw new Error("Barcode belongs to " + registeredBranch + ": " + item.barcode);
       if (inventoryBarcodes[item.barcode]) throw new Error("Barcode is already in Inventory: " + item.barcode);
       if (product.trackMode === "UNIT" && item.quantity !== 1) throw new Error("Unit-tracked barcode quantity must be 1: " + item.barcode);
+      medStockValidatePackImport_(product, item.quantity);
       return {
         barcode: item.barcode,
         lot: item.lot,
@@ -265,6 +268,7 @@ function medStockCheckStockBatch_(body, ss) {
       const statusBefore = String(row[8] || "").trim().toUpperCase();
       const trackMode = String(row[20] || "").trim().toUpperCase();
       const quantityBefore = Number(row[9]);
+      medStockValidatePackCheck_(ss, row, item.actualQuantity, item.actualType);
       if (itemBranch !== branch) throw new Error("Barcode belongs to " + itemBranch + ": " + item.id);
       if (["FULL", "OPEN"].indexOf(typeBefore) === -1) throw new Error("Inventory stock type must be FULL or OPEN: " + item.id);
       if (["UNIT", "BULK"].indexOf(trackMode) === -1) throw new Error("Inventory Track Mode is invalid: " + item.id);
@@ -436,6 +440,7 @@ function medStockCutStockBatch_(body, ss) {
       if (["FULL", "OPEN"].indexOf(typeBefore) === -1) throw new Error("Inventory stock type must be FULL or OPEN: " + item.id);
       if (["UNIT", "BULK"].indexOf(trackMode) === -1) throw new Error("Inventory Track Mode is invalid: " + item.id);
       const amount = item.cutMode === "ALL" ? quantityBefore : item.cutQuantity;
+      medStockValidatePackCut_(ss, row, amount);
       if (amount <= 0 || amount > quantityBefore) throw new Error("Insufficient quantity: " + item.id);
       if (trackMode === "UNIT" && (item.cutMode !== "ALL" || quantityBefore !== 1 || amount !== 1)) {
         throw new Error("Unit-tracked stock must use ALL with quantity 1: " + item.id);

@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { isPacked } from "@/lib/packaging";
 import Barcode from "react-barcode";
 import {
   BrotherLabelStatus,
@@ -52,11 +53,13 @@ type Product = {
   accent: string;
   tint: string;
   unit: string;
+  packageUnit?: string;
+  unitsPerPack?: number;
   image?: string;
 };
 
 type InventoryApiResponse = {
-  products?: Array<Pick<Product, "name" | "sku" | "date" | "category" | "unit" | "image">>;
+  products?: Array<Pick<Product, "name" | "sku" | "date" | "category" | "unit" | "image" | "packageUnit" | "unitsPerPack">>;
   updatedAt?: string;
   error?: string;
 };
@@ -500,7 +503,7 @@ export default function CreateBarcodePage() {
                     <span><small>STOCK DATE</small>{new Date(`${product.date}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
                   </div>
                   <div className="quantity-row">
-                    <div><small>QUANTITY</small><strong>{product.quantity}</strong><span> {product.unit}</span></div>
+                    <div><small>{isPacked(product) ? "BOXES / BARCODES" : "QUANTITY"}</small><strong>{product.quantity}</strong><span> {isPacked(product) ? "Box" : product.unit}</span>{isPacked(product) && <small>1 Box = {product.unitsPerPack} {product.unit} · 1 Barcode</small>}</div>
                     <div className="stepper">
                       <button onClick={() => adjustQuantity(product.id, -1)} aria-label={`Decrease ${product.name}`}>−</button>
                       <button onClick={() => adjustQuantity(product.id, 1)} aria-label={`Increase ${product.name}`}>+</button>
