@@ -52,7 +52,7 @@ function setup(size = 5, unit = 'Bottle') {
 
 for (const [size,unit] of [[5,'Bottle'],[10,'Bottle'],[2,'Syringe'],[1,'Syringe']]) {
   const t = setup(size,unit);
-  assert.throws(() => t.imp(size+1), /full box/);
+  assert.throws(() => t.imp(size+1), /full container/);
   assert.equal(t.sheets.Inventory.getLastRow(),1);
   assert.equal(t.imp(size).importedCount,1);
   assert.equal(t.sheets.Inventory.rows[1][9],size);
@@ -73,8 +73,8 @@ for (const [size,unit] of [[5,'Bottle'],[10,'Bottle'],[2,'Syringe'],[1,'Syringe'
   const t=setup(); t.imp(5);
   const check=(qty,type)=>t.ctx.medStockCheckStockBatch_({branch:'Thonglor',items:[{id:t.barcode,actualQuantity:qty,actualType:type,note:'Physical count'}]},t.ss);
   assert.throws(()=>check(4,'FULL'),/must be OPEN/);
-  assert.throws(()=>check(6,'OPEN'),/Invalid box/);
-  assert.throws(()=>check(4.5,'OPEN'),/Invalid box/);
+  assert.throws(()=>check(6,'OPEN'),/Invalid container/);
+  assert.throws(()=>check(4.5,'OPEN'),/Invalid container/);
   check(4,'OPEN'); assert.equal(t.sheets.Inventory.rows[1][9],4);
   t.sheets.Inventory.rows[1][4]='CC';
   assert.throws(()=>t.cut(1),/Legacy unit/);
@@ -95,3 +95,14 @@ for (const [size,unit] of [[5,'Bottle'],[10,'Bottle'],[2,'Syringe'],[1,'Syringe'
   assert.equal(data.transactions[0].unit,'CC');
 }
 console.log('PASS: box import/cut/check, duplicate and invalid input rejection, retained barcode capacity, historical log units and audit-only corrections. No live stock mutated.');
+
+{
+ const t=setup(200,'IU');
+ t.sheets['Product List'].rows[1][12]='Bottle';
+ t.imp(200); t.cut(20);
+ assert.equal(t.sheets.Inventory.rows[1][9],180);
+ t.cut(2.5);
+ assert.equal(t.sheets.Inventory.rows[1][9],177.5);
+ assert.equal(t.ctx.medStockWebApiDashboard_(t.ss).inventory[0].unitsPerPack,200);
+ console.log('PASS: 200 IU bottle, partial and fractional IU cuts, retained bottle capacity.');
+}

@@ -80,7 +80,7 @@ function queueErrors(item: QueueItem, duplicateCount: number, inventoryIds: Set<
   if (inventoryIds.has(item.barcode)) errors.push("ALREADY IN INVENTORY");
   if (!Number.isFinite(item.quantity) || item.quantity <= 0) errors.push("INVALID QTY");
   if (item.trackMode === "UNIT" && item.quantity !== 1) errors.push("UNIT QTY MUST BE 1");
-  if (isPacked(item) && item.quantity !== item.unitsPerPack) errors.push("QTY MUST MATCH ONE FULL BOX");
+  if (isPacked(item) && item.quantity !== item.unitsPerPack) errors.push("QTY MUST MATCH ONE FULL CONTAINER");
   if (item.type !== "FULL") errors.push("TYPE MUST BE FULL");
   return errors;
 }
@@ -331,7 +331,7 @@ export function ImportWorkspace() {
 
             <div className={`${styles.validation} ${styles[validationType]}`}><span>{validationType === "ready" ? <IconCheck size={17} /> : validationType === "error" ? <IconAlertCircle size={17} /> : <IconBarcode size={17} />}</span><div><small>Validation result</small><strong>{validation}</strong></div></div>
 
-            <label className={styles.autoAdd}><input type="checkbox" checked={autoAdd} onChange={(event) => { setAutoAdd(event.target.checked); setBatchStatus(event.target.checked ? "AUTO ADD ON — READY FOR SCAN" : "MANUAL MODE — SCAN AND REVIEW DETAILS"); requestAnimationFrame(() => barcodeRef.current?.focus()); }} /><span><b>Auto add</b><small>Each scan adds one barcode. Box contents are filled from Product List.</small></span></label>
+            <label className={styles.autoAdd}><input type="checkbox" checked={autoAdd} onChange={(event) => { setAutoAdd(event.target.checked); setBatchStatus(event.target.checked ? "AUTO ADD ON — READY FOR SCAN" : "MANUAL MODE — SCAN AND REVIEW DETAILS"); requestAnimationFrame(() => barcodeRef.current?.focus()); }} /><span><b>Auto add</b><small>Each scan adds one barcode. Container contents are filled from Product List.</small></span></label>
 
             <button className={styles.addButton} type="button" onClick={handleManualAdd} disabled={!scannedProduct || autoAdd}><IconPackageImport size={18} /> Add to queue</button>
 
@@ -347,7 +347,7 @@ export function ImportWorkspace() {
                 <tbody>
                   {queue.map((item) => {
                     const errors = rowErrors.get(item.barcode) ?? [];
-                    return <tr key={item.barcode} className={errors.length ? styles.invalidRow : ""}><td><input aria-label={`Select ${item.barcode}`} type="checkbox" checked={selected.has(item.barcode)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(item.barcode); else next.delete(item.barcode); return next; })} /></td><td><code>{item.barcode}</code><small>{item.sku}</small></td><td><strong>{item.productName}</strong><small>{item.trackMode} · {item.unit}{isPacked(item) ? ` · 1 Box = ${item.unitsPerPack} ${item.unit}` : ""}</small></td><td><input value={item.lot} onChange={(event) => updateQueueItem(item.barcode, { lot: event.target.value })} placeholder="Optional" /></td><td><input type="date" value={item.expiry} onChange={(event) => updateQueueItem(item.barcode, { expiry: event.target.value })} /></td><td><input className={styles.qtyInput} type="number" min="0.001" step="0.001" value={item.quantity} disabled={isPacked(item) || item.trackMode === "UNIT"} onChange={(event) => updateQueueItem(item.barcode, { quantity: Number(event.target.value) })} /></td><td><span className={styles.typeBadge}>FULL</span></td><td>{item.location}</td><td><span className={errors.length ? styles.blockedBadge : styles.readyBadge}>{errors.length ? `BLOCK: ${errors.join(" / ")}` : "READY"}</span></td></tr>;
+                    return <tr key={item.barcode} className={errors.length ? styles.invalidRow : ""}><td><input aria-label={`Select ${item.barcode}`} type="checkbox" checked={selected.has(item.barcode)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(item.barcode); else next.delete(item.barcode); return next; })} /></td><td><code>{item.barcode}</code><small>{item.sku}</small></td><td><strong>{item.productName}</strong><small>{item.trackMode} · {item.unit}{isPacked(item) ? ` · 1 ${item.packageUnit} = ${item.unitsPerPack} ${item.unit}` : ""}</small></td><td><input value={item.lot} onChange={(event) => updateQueueItem(item.barcode, { lot: event.target.value })} placeholder="Optional" /></td><td><input type="date" value={item.expiry} onChange={(event) => updateQueueItem(item.barcode, { expiry: event.target.value })} /></td><td><input className={styles.qtyInput} type="number" min="0.001" step="0.001" value={item.quantity} disabled={isPacked(item) || item.trackMode === "UNIT"} onChange={(event) => updateQueueItem(item.barcode, { quantity: Number(event.target.value) })} /></td><td><span className={styles.typeBadge}>FULL</span></td><td>{item.location}</td><td><span className={errors.length ? styles.blockedBadge : styles.readyBadge}>{errors.length ? `BLOCK: ${errors.join(" / ")}` : "READY"}</span></td></tr>;
                   })}
                 </tbody>
               </table>

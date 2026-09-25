@@ -70,7 +70,7 @@ function medStockWebApiDashboard_(ss) {
         unit: String(row[4] || product.unit || "units").trim(), location: String(row[7] || "").trim(),
         status: String(row[8] || "").trim().toUpperCase(), quantity: medStockWebApiNumber_(row[9]),
         containerType: String(row[13] || "").trim().toUpperCase(), packageUnit: product.packageUnit || "",
-        unitsPerPack: product.packageUnit === "Box" ? Number(row[14]) : 0,
+        unitsPerPack: product.packageUnit ? Number(row[14]) : 0,
         trackMode: String(product.trackMode || "").trim().toUpperCase() });
     });
   }
