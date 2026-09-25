@@ -12,11 +12,19 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
   const [location, setLocation] = useState("ALL");
   const [status, setStatus] = useState("ALL");
   const [containerType, setContainerType] = useState("ALL");
+  const [group, setGroup] = useState("ALL");
+  const [packageType, setPackageType] = useState("ALL");
+  const [trackMode, setTrackMode] = useState("ALL");
+  const [sort, setSort] = useState("PRODUCT");
 
   const locations = useMemo(
     () => Array.from(new Set(inventory.map((item) => item.location).filter(Boolean))).sort(),
     [inventory],
   );
+  const groups = useMemo(() => Array.from(new Set(inventory.map((item) => item.sku.split("-")[0]).filter(Boolean))).sort(), [inventory]);
+  const packageTypes = useMemo(() => Array.from(new Set(inventory.map((item) => item.packageUnit || item.unit).filter(Boolean))).sort(), [inventory]);
+  const trackModes = useMemo(() => Array.from(new Set(inventory.map((item) => item.trackMode).filter(Boolean))).sort(), [inventory]);
+  const statuses = useMemo(() => Array.from(new Set(inventory.map((item) => item.status).filter(Boolean))).sort(), [inventory]);
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -26,16 +34,26 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
       const matchesLocation = location === "ALL" || item.location === location;
       const matchesStatus = status === "ALL" || item.status === status;
       const matchesType = containerType === "ALL" || item.containerType === containerType;
-      return matchesQuery && matchesLocation && matchesStatus && matchesType;
+      const matchesGroup = group === "ALL" || item.sku.split("-")[0] === group;
+      const matchesPackage = packageType === "ALL" || (item.packageUnit || item.unit) === packageType;
+      const matchesTrackMode = trackMode === "ALL" || item.trackMode === trackMode;
+      return matchesQuery && matchesLocation && matchesStatus && matchesType && matchesGroup && matchesPackage && matchesTrackMode;
+    }).sort((left, right) => {
+      if (sort === "SKU") return left.sku.localeCompare(right.sku) || left.id.localeCompare(right.id);
+      if (sort === "QUANTITY_DESC") return right.quantity - left.quantity || left.sku.localeCompare(right.sku);
+      if (sort === "QUANTITY_ASC") return left.quantity - right.quantity || left.sku.localeCompare(right.sku);
+      if (sort === "LOCATION") return left.location.localeCompare(right.location) || left.productName.localeCompare(right.productName);
+      return left.productName.localeCompare(right.productName) || left.id.localeCompare(right.id);
     });
-  }, [containerType, inventory, location, query, status]);
+  }, [containerType, group, inventory, location, packageType, query, sort, status, trackMode]);
 
   const fullContainers = filtered.filter((item) => item.containerType === "FULL").length;
   const openContainers = filtered.filter((item) => item.containerType === "OPEN").length;
+  const resetFilters = () => { setQuery(""); setLocation("ALL"); setStatus("ALL"); setContainerType("ALL"); setGroup("ALL"); setPackageType("ALL"); setTrackMode("ALL"); setSort("PRODUCT"); };
 
   return (
     <section className={styles.inventoryPanel}>
-      <div className={styles.inventoryToolbar}>
+      <div className={`${styles.inventoryToolbar} ${styles.inventoryToolbarDetailed}`}>
         <div className={styles.logSearch}>
           <IconSearch size={18} />
           <input
@@ -47,6 +65,13 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
         </div>
         <div className={styles.inventoryFilters}>
           <label>
+            <span>Group</span>
+            <select value={group} onChange={(event) => setGroup(event.target.value)}>
+              <option value="ALL">All groups</option>
+              {groups.map((value) => <option value={value} key={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
             <span>Location</span>
             <select value={location} onChange={(event) => setLocation(event.target.value)}>
               <option value="ALL">All locations</option>
@@ -57,9 +82,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
             <span>Status</span>
             <select value={status} onChange={(event) => setStatus(event.target.value)}>
               <option value="ALL">All statuses</option>
-              <option value="IN STOCK">In stock</option>
-              <option value="OUT OF STOCK">Out of stock</option>
-              <option value="SOLD">Sold</option>
+              {statuses.map((value) => <option value={value} key={value}>{value}</option>)}
             </select>
           </label>
           <label>
@@ -70,7 +93,32 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
               <option value="OPEN">Open</option>
             </select>
           </label>
+          <label>
+            <span>Package</span>
+            <select value={packageType} onChange={(event) => setPackageType(event.target.value)}>
+              <option value="ALL">All packages</option>
+              {packageTypes.map((value) => <option value={value} key={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Tracking</span>
+            <select value={trackMode} onChange={(event) => setTrackMode(event.target.value)}>
+              <option value="ALL">UNIT &amp; BULK</option>
+              {trackModes.map((value) => <option value={value} key={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Sort</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value)}>
+              <option value="PRODUCT">Product name: A–Z</option>
+              <option value="SKU">SKU: A–Z</option>
+              <option value="QUANTITY_DESC">Quantity: high to low</option>
+              <option value="QUANTITY_ASC">Quantity: low to high</option>
+              <option value="LOCATION">Location: A–Z</option>
+            </select>
+          </label>
         </div>
+        <button className={styles.resetFilters} onClick={resetFilters}>Reset filters</button>
       </div>
 
       <div className={styles.tableScroll}>

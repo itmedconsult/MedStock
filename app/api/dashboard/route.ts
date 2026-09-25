@@ -76,6 +76,9 @@ function transaction(value: unknown): StockTransaction | null {
   const sku = text(item.sku).toUpperCase();
   const occurredAt = text(item.occurredAt);
   const type = text(item.type).toUpperCase();
+  const source = text(item.source, "Google Sheets");
+  const fallbackAction = /IMPORT/i.test(source) ? "IMPORT" : /CUT/i.test(source) ? "STOCK OUT" : type;
+  const action = text(item.action, fallbackAction).toUpperCase();
   if (!id || !sku || !occurredAt || (type !== "IN" && type !== "OUT")) return null;
   return {
     id,
@@ -86,8 +89,11 @@ function transaction(value: unknown): StockTransaction | null {
     quantity: number(item.quantity),
     balance: number(item.balance),
     unit: text(item.unit, "units"),
-    source: text(item.source, "Google Sheets"),
+    source,
     actor: text(item.actor, "Spreadsheet User"),
+    action,
+    reason: text(item.reason, action === "STOCK OUT" ? "USE" : action).toUpperCase(),
+    location: text(item.location),
   };
 }
 
