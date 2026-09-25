@@ -5,7 +5,7 @@ export function MovementChart({ data }: { data: DailyMovement[] }) {
   const maximum = Math.max(1, ...data.flatMap((item) => [item.added, item.cut]));
 
   return (
-    <div className={styles.chart} aria-label="Products added and cut stock by day">
+    <div className={styles.chart} aria-label="Imported barcodes and cut operations by day">
       <div className={styles.chartScale} aria-hidden="true"><span>{maximum}</span><span>{Math.round(maximum / 2)}</span><span>0</span></div>
       <div className={styles.chartPlot}>
         <i className={styles.gridTop} /><i className={styles.gridMiddle} /><i className={styles.gridBottom} />

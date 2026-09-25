@@ -30,7 +30,8 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
     });
   }, [containerType, inventory, location, query, status]);
 
-  const filteredQuantity = filtered.reduce((sum, item) => sum + item.quantity, 0);
+  const fullContainers = filtered.filter((item) => item.containerType === "FULL").length;
+  const openContainers = filtered.filter((item) => item.containerType === "OPEN").length;
 
   return (
     <section className={styles.inventoryPanel}>
@@ -95,7 +96,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
 
       <footer>
         <span>Showing {filtered.length} of {inventory.length} barcodes</span>
-        <span>Filtered quantity: {filteredQuantity}</span>
+        <span>Full: {fullContainers} · Open: {openContainers}</span>
         <span>Live data from Google Sheets · Inventory</span>
       </footer>
     </section>
