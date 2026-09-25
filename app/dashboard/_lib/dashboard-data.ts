@@ -42,6 +42,13 @@ export type DailyMovement = {
   cut: number;
 };
 
+export type SkuStockSummary = {
+  sku: string;
+  productName: string;
+  barcodes: number;
+  openContainers: number;
+};
+
 export type DashboardData = {
   products: DashboardProduct[];
   inventory: InventoryItem[];
@@ -70,6 +77,28 @@ export function summarizeDashboard(data: DashboardData): DashboardSummary {
     cutOperations: data.transactions.filter((item) => item.type === "OUT").length,
     openContainers: inStockItems.filter((item) => item.containerType === "OPEN").length,
   };
+}
+
+export function createSkuStockSummary(inventory: InventoryItem[]): SkuStockSummary[] {
+  const bySku = new Map<string, SkuStockSummary>();
+
+  inventory
+    .filter((item) => item.status === "IN STOCK" && item.quantity > 0)
+    .forEach((item) => {
+      const current = bySku.get(item.sku) ?? {
+        sku: item.sku,
+        productName: item.productName,
+        barcodes: 0,
+        openContainers: 0,
+      };
+      current.barcodes += 1;
+      if (item.containerType === "OPEN") current.openContainers += 1;
+      bySku.set(item.sku, current);
+    });
+
+  return [...bySku.values()].sort((left, right) =>
+    right.barcodes - left.barcodes || left.sku.localeCompare(right.sku),
+  );
 }
 
 export function createDailyMovements(transactions: StockTransaction[], days = 7) {
