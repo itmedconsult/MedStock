@@ -61,7 +61,7 @@
 .stats strong { margin-top: 4px; font-size: 28px; line-height: 1; }
 .stats span { overflow: hidden; color: #929e9a; font-size: 10px; white-space: nowrap; text-overflow: ellipsis; }
 
-.chartCard, .activityCard, .explainerCard, .logPanel, .inventoryPanel, .errorState { border: 1px solid #dfe6e2; border-radius: 19px; background: white; box-shadow: 0 8px 26px rgba(28,62,54,.04); }
+.chartCard, .activityCard, .skuStockCard, .explainerCard, .logPanel, .inventoryPanel, .errorState { border: 1px solid #dfe6e2; border-radius: 19px; background: white; box-shadow: 0 8px 26px rgba(28,62,54,.04); }
 .chartCard { padding: 24px 25px 21px; }
 .panelHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .panelHeading h2, .explainerCard h2 { margin: 0; font-size: 18px; letter-spacing: -.4px; }
@@ -84,9 +84,16 @@
 .cutBar { background: linear-gradient(#e2a06c, #c6743a); }
 .chartDay small { align-self: end; color: #7f8d88; font-size: 9px; }
 
-.overviewGrid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, .75fr); gap: 18px; margin-top: 18px; }
-.activityCard { padding: 23px 24px; }
+.overviewGrid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(340px, .85fr); gap: 18px; margin-top: 18px; }
+.activityCard, .skuStockCard { min-height: 430px; padding: 23px 24px; }
 .panelHeading button { border: 0; color: var(--dash-green); background: none; font-size: 10px; font-weight: 800; cursor: pointer; }
+.skuStockList { max-height: 355px; overflow-y: auto; margin-top: 15px; padding-right: 7px; border-top: 1px solid #edf1ef; }
+.skuStockList > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 11px 2px; border-bottom: 1px solid #edf1ef; }
+.skuStockList > div > div { min-width: 0; display: grid; gap: 3px; }
+.skuStockList strong { overflow: hidden; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+.skuStockList small { color: #8c9995; font-size: 9px; }
+.skuStockList > div > b { min-width: 76px; padding: 8px 10px; border-radius: 10px; color: #226c5b; background: #e8f3ef; font-size: 17px; text-align: center; }
+.skuStockList > div > b small { display: block; margin-top: 2px; color: #588479; font-size: 7px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
 .activityList { margin-top: 15px; }
 .activityList > div { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid #edf1ef; }
 .activityList > div > span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; }
@@ -96,6 +103,8 @@
 .activityList strong { overflow: hidden; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
 .activityList small { color: #8c9995; font-size: 9px; }
 .activityList > div > b { font-size: 11px; }
+.recentActivityCard .activityList > div { grid-template-columns: auto minmax(0, 1fr); }
+.recentActivityCard .activityList > div > b { grid-column: 2; justify-self: start; margin-top: -7px; font-size: 9px; }
 .positive { color: #26745f; }.negative { color: #b45f31; }
 .explainerCard { padding: 25px; background: linear-gradient(145deg, #173b34, #245b50); color: white; }
 .explainerCard > span { width: 45px; height: 45px; display: grid; place-items: center; margin-bottom: 30px; border-radius: 14px; color: #d8ece6; background: rgba(255,255,255,.1); }
