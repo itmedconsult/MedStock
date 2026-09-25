@@ -503,7 +503,7 @@ export default function CreateBarcodePage() {
                     <span><small>STOCK DATE</small>{new Date(`${product.date}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
                   </div>
                   <div className="quantity-row">
-                    <div><small>{isPacked(product) ? "BOXES / BARCODES" : "QUANTITY"}</small><strong>{product.quantity}</strong><span> {isPacked(product) ? "Box" : product.unit}</span>{isPacked(product) && <small>1 Box = {product.unitsPerPack} {product.unit} · 1 Barcode</small>}</div>
+                    <div><small>{isPacked(product) ? `${product.packageUnit === "Box" ? "BOXES" : "BOTTLES"} / BARCODES` : "QUANTITY"}</small><strong>{product.quantity}</strong><span> {isPacked(product) ? product.packageUnit : product.unit}</span>{isPacked(product) && <small>1 {product.packageUnit} = {product.unitsPerPack} {product.unit} · 1 Barcode</small>}</div>
                     <div className="stepper">
                       <button onClick={() => adjustQuantity(product.id, -1)} aria-label={`Decrease ${product.name}`}>−</button>
                       <button onClick={() => adjustQuantity(product.id, 1)} aria-label={`Increase ${product.name}`}>+</button>

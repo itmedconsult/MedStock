@@ -18,13 +18,13 @@ function medStockPackageFields_(ss, sku) {
 }
 
 function medStockIsPacked_(pack) {
-  return pack.packageUnit === "Box";
+  return ["Box", "Bottle"].indexOf(pack.packageUnit) !== -1;
 }
 
 function medStockValidatePackImport_(product, quantity) {
   if (!medStockIsPacked_(product)) return;
   if (!Number.isInteger(product.unitsPerPack) || product.unitsPerPack < 1 || quantity !== product.unitsPerPack) {
-    throw new Error("One barcode must contain one full box: " + product.sku + " = " + product.unitsPerPack + " " + product.unit);
+    throw new Error("One barcode must contain one full container: " + product.sku + " = " + product.unitsPerPack + " " + product.unit);
   }
 }
 
@@ -33,10 +33,10 @@ function medStockValidatePackCheck_(ss, row, quantity, type) {
   if (!medStockIsPacked_(pack)) return;
   if (String(row[4]).trim() !== pack.unit) throw new Error("Legacy unit requires correction before use: " + row[0]);
   const capacity = Number(row[14]);
-  if (!Number.isInteger(quantity) || quantity < 0 || !Number.isInteger(capacity) || capacity < 1 || quantity > capacity) {
-    throw new Error("Invalid box content count: " + row[0]);
+  if (((pack.unit === "Bottle" || pack.unit === "Syringe") && !Number.isInteger(quantity)) || !Number.isFinite(quantity) || quantity < 0 || !Number.isInteger(capacity) || capacity < 1 || quantity > capacity) {
+    throw new Error("Invalid container content count: " + row[0]);
   }
-  if (quantity > 0 && type === "FULL" && quantity !== capacity) throw new Error("Partially used box must be OPEN: " + row[0]);
+  if (quantity > 0 && type === "FULL" && quantity !== capacity) throw new Error("Partially used container must be OPEN: " + row[0]);
 }
 
 function medStockValidatePackCut_(ss, row, amount) {

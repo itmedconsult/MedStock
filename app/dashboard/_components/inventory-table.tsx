@@ -83,7 +83,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
                 <td><code>{item.id}</code></td>
                 <td><strong>{item.productName}</strong><small>{item.sku}</small></td>
                 <td><strong>{item.location || "—"}</strong></td>
-                <td><strong>{item.quantity} {item.unit}</strong>{item.packageUnit === "Box" && <small>1 Box / Barcode · {item.unitsPerPack} {item.unit} when full</small>}<span className={item.status === "IN STOCK" ? styles.statusIn : styles.statusOut}>{item.status || "UNKNOWN"}</span></td>
+                <td><strong>{item.quantity} {item.unit}</strong>{item.packageUnit && <small>1 {item.packageUnit} / Barcode · {item.unitsPerPack} {item.unit} when full</small>}<span className={item.status === "IN STOCK" ? styles.statusIn : styles.statusOut}>{item.status || "UNKNOWN"}</span></td>
                 <td><span className={item.containerType === "OPEN" ? styles.containerOpen : styles.containerFull}>{item.containerType || "—"}</span></td>
                 <td><span className={styles.trackMode}>{item.trackMode || "—"}</span></td>
               </tr>
