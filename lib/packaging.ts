@@ -1,7 +1,7 @@
 export type Packaging = { packageUnit?: string; unitsPerPack?: number };
 
 export function isPacked(product: Packaging) {
-  return product.packageUnit === "Box" && Number.isInteger(product.unitsPerPack) && Number(product.unitsPerPack) > 0;
+  return ["Box", "Bottle"].includes(product.packageUnit || "") && Number.isInteger(product.unitsPerPack) && Number(product.unitsPerPack) > 0;
 }
 
 export function importQuantity(product: Packaging) {
