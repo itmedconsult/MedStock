@@ -117,11 +117,8 @@ export function ImportWorkspace() {
     item.barcode,
     queueErrors(item, duplicateCounts[item.barcode] ?? 0, inventoryIds),
   ])), [duplicateCounts, inventoryIds, queue]);
-  const totalQuantity = queue.reduce((sum, item) => sum + (Number.isFinite(item.quantity) ? item.quantity : 0), 0);
-  const invalidRows = queue.filter((item) => (rowErrors.get(item.barcode)?.length ?? 0) > 0).length;
   const allSelected = queue.length > 0 && selected.size === queue.length;
   const selectedItems = useMemo(() => queue.filter((item) => selected.has(item.barcode)), [queue, selected]);
-  const selectedQuantity = selectedItems.reduce((sum, item) => sum + (Number.isFinite(item.quantity) ? item.quantity : 0), 0);
   const selectedInvalidRows = selectedItems.filter((item) => (rowErrors.get(item.barcode)?.length ?? 0) > 0).length;
 
   const loadSource = async () => {
@@ -270,7 +267,7 @@ export function ImportWorkspace() {
     }
 
     setIsImporting(true);
-    setBatchStatus(`VALIDATING ${selectedItems.length} SELECTED BARCODE(S), TOTAL QTY ${selectedQuantity}`);
+    setBatchStatus(`VALIDATING ${selectedItems.length} SELECTED BARCODE(S)`);
     try {
       const response = await fetch("/api/import", {
         method: "POST",
@@ -304,7 +301,7 @@ export function ImportWorkspace() {
       <div className={styles.content}>
         <section className={styles.titleRow}>
           <div><p>Stock intake</p><h1>Import scanner</h1><span>Scan printed barcodes, review the batch, then import into Inventory and Log Data.</span></div>
-          <div className={styles.batchSummary}><small>Current queue</small><strong>{queue.length}</strong><span>{totalQuantity} total qty</span></div>
+          <div className={styles.batchSummary}><small>Current queue</small><strong>{queue.length}</strong><span>barcode{queue.length === 1 ? "" : "s"} · 1 per container</span></div>
         </section>
 
         {sourceState === "error" && <section className={styles.sourceError}><IconAlertCircle size={19} /><div><strong>Inventory data unavailable</strong><span>{sourceError}</span></div><button type="button" onClick={() => void loadSource()}><IconRefresh size={15} /> Retry</button></section>}
@@ -326,7 +323,7 @@ export function ImportWorkspace() {
               <label><span>Track mode</span><input value={scannedProduct?.trackMode ?? ""} placeholder="—" readOnly /></label>
               <label><span>Lot <em>Optional</em></span><input value={lot} onChange={(event) => setLot(event.target.value)} placeholder="Lot number" disabled={!scannedProduct} /></label>
               <label><span>Expiry date <em>Optional</em></span><input type="date" value={expiry} onChange={(event) => setExpiry(event.target.value)} disabled={!scannedProduct} /></label>
-              <label><span>Quantity {scannedProduct ? `(${scannedProduct.unit})` : ""}</span><input type="number" min="0.001" step="0.001" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} disabled={!scannedProduct || isPacked(scannedProduct) || scannedProduct.trackMode.toUpperCase() === "UNIT"} /></label>
+              <label><span>{scannedProduct && isPacked(scannedProduct) ? `Contents per ${scannedProduct.packageUnit} (${scannedProduct.unit})` : `Quantity ${scannedProduct ? `(${scannedProduct.unit})` : ""}`}</span><input type="number" min="0.001" step="0.001" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} disabled={!scannedProduct || isPacked(scannedProduct) || scannedProduct.trackMode.toUpperCase() === "UNIT"} /></label>
             </div>
 
             <div className={`${styles.validation} ${styles[validationType]}`}><span>{validationType === "ready" ? <IconCheck size={17} /> : validationType === "error" ? <IconAlertCircle size={17} /> : <IconBarcode size={17} />}</span><div><small>Validation result</small><strong>{validation}</strong></div></div>
@@ -343,7 +340,7 @@ export function ImportWorkspace() {
 
             <div className={styles.tableScroll}>
               <table>
-                <thead><tr><th><input aria-label="Select all rows" type="checkbox" checked={allSelected} onChange={(event) => setSelected(event.target.checked ? new Set(queue.map((item) => item.barcode)) : new Set())} /></th><th>Barcode</th><th>Product</th><th>Lot</th><th>Expiry</th><th>Qty</th><th>Type</th><th>Location</th><th>Validation</th></tr></thead>
+                <thead><tr><th><input aria-label="Select all rows" type="checkbox" checked={allSelected} onChange={(event) => setSelected(event.target.checked ? new Set(queue.map((item) => item.barcode)) : new Set())} /></th><th>Barcode</th><th>Product</th><th>Lot</th><th>Expiry</th><th>Contents</th><th>Type</th><th>Location</th><th>Validation</th></tr></thead>
                 <tbody>
                   {queue.map((item) => {
                     const errors = rowErrors.get(item.barcode) ?? [];
