@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test:dashboard": "node --experimental-strip-types scripts/test-dashboard-metrics.mts",
     "start": "next start",
     "lint": "next lint"
   },

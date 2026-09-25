@@ -50,6 +50,28 @@ export type DashboardData = {
   updatedAt: string;
 };
 
+export type DashboardSummary = {
+  inStockItems: InventoryItem[];
+  activeSkus: number;
+  quantityOnHand: number;
+  stockAdded: number;
+  cutOperations: number;
+  openContainers: number;
+};
+
+export function summarizeDashboard(data: DashboardData): DashboardSummary {
+  const inStockItems = data.inventory.filter((item) => item.status === "IN STOCK" && item.quantity > 0);
+
+  return {
+    inStockItems,
+    activeSkus: new Set(inStockItems.map((item) => item.sku)).size,
+    quantityOnHand: inStockItems.length,
+    stockAdded: data.transactions.filter((item) => item.type === "IN").length,
+    cutOperations: data.transactions.filter((item) => item.type === "OUT").length,
+    openContainers: inStockItems.filter((item) => item.containerType === "OPEN").length,
+  };
+}
+
 export function createDailyMovements(transactions: StockTransaction[], days = 7) {
   const latestDate = transactions.length
     ? new Date(Math.max(...transactions.map((item) => new Date(item.occurredAt).getTime())))
@@ -65,12 +87,8 @@ export function createDailyMovements(transactions: StockTransaction[], days = 7)
     movements.push({
       key,
       label: date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
-      added: dailyTransactions
-        .filter((item) => item.type === "IN")
-        .reduce((sum, item) => sum + item.quantity, 0),
-      cut: Math.abs(dailyTransactions
-        .filter((item) => item.type === "OUT")
-        .reduce((sum, item) => sum + item.quantity, 0)),
+      added: dailyTransactions.filter((item) => item.type === "IN").length,
+      cut: dailyTransactions.filter((item) => item.type === "OUT").length,
     });
   }
 
