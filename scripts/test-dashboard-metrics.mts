@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createDailyMovements, createSkuStockSummary, summarizeDashboard, type DashboardData } from "../app/dashboard/_lib/dashboard-data.ts";
+import { createDailyMovements, createSkuStockSummary, summarizeDashboard, transactionOperation, type DashboardData } from "../app/dashboard/_lib/dashboard-data.ts";
 
 const data: DashboardData = {
   products: [],
@@ -10,11 +10,11 @@ const data: DashboardData = {
     { id: "SOLD-1", sku: "PEN-003", productName: "Mounjaro", unit: "Pen", location: "Thonglor", status: "SOLD", quantity: 0, containerType: "FULL", trackMode: "UNIT" },
   ],
   transactions: [
-    { id: "IN-1", occurredAt: "2026-09-25T01:00:00.000Z", type: "IN", sku: "AES-058", productName: "Bienox 100 U", quantity: 100, balance: 100, unit: "U", source: "Import Stock API", actor: "Tester" },
-    { id: "IN-2", occurredAt: "2026-09-25T02:00:00.000Z", type: "IN", sku: "AES-061", productName: "MBTOX", quantity: 100, balance: 100, unit: "U", source: "Import Stock API", actor: "Tester" },
-    { id: "IN-3", occurredAt: "2026-09-25T03:00:00.000Z", type: "IN", sku: "PEN-003", productName: "Mounjaro", quantity: 1, balance: 1, unit: "Pen", source: "Import Stock API", actor: "Tester" },
-    { id: "IN-4", occurredAt: "2026-09-25T04:00:00.000Z", type: "IN", sku: "AES-048", productName: "Aestox", quantity: 1, balance: 1, unit: "Bottle", source: "Import Stock API", actor: "Tester" },
-    { id: "OUT-1", occurredAt: "2026-09-25T05:00:00.000Z", type: "OUT", sku: "AES-061", productName: "MBTOX", quantity: -65, balance: 35, unit: "U", source: "Cut Stock API", actor: "Tester" },
+    { id: "IN-1", occurredAt: "2026-09-25T01:00:00.000Z", type: "IN", sku: "AES-058", productName: "Bienox 100 U", quantity: 100, balance: 100, unit: "U", source: "Import Stock API", actor: "Tester", action: "IMPORT", reason: "IMPORT", location: "Thonglor" },
+    { id: "IN-2", occurredAt: "2026-09-25T02:00:00.000Z", type: "IN", sku: "AES-061", productName: "MBTOX", quantity: 100, balance: 100, unit: "U", source: "Import Stock API", actor: "Tester", action: "IMPORT", reason: "IMPORT", location: "Thonglor" },
+    { id: "IN-3", occurredAt: "2026-09-25T03:00:00.000Z", type: "IN", sku: "PEN-003", productName: "Mounjaro", quantity: 1, balance: 1, unit: "Pen", source: "Import Stock API", actor: "Tester", action: "IMPORT", reason: "IMPORT", location: "Thonglor" },
+    { id: "IN-4", occurredAt: "2026-09-25T04:00:00.000Z", type: "IN", sku: "AES-048", productName: "Aestox", quantity: 1, balance: 1, unit: "Bottle", source: "Import Stock API", actor: "Tester", action: "IMPORT", reason: "IMPORT", location: "Thonglor" },
+    { id: "OUT-1", occurredAt: "2026-09-25T05:00:00.000Z", type: "OUT", sku: "AES-061", productName: "MBTOX", quantity: -65, balance: 35, unit: "U", source: "Cut Stock API", actor: "Tester", action: "STOCK OUT", reason: "USE", location: "Thonglor" },
   ],
   waitingForImport: 0,
   updatedAt: "2026-09-25T06:00:00.000Z",
@@ -33,6 +33,10 @@ assert.deepEqual(skuStock.map((item) => [item.sku, item.barcodes, item.openConta
   ["AES-061", 1, 1],
   ["PEN-003", 1, 0],
 ]);
+assert.equal(skuStock.find((item) => item.sku === "PEN-003")?.group, "PEN");
+assert.deepEqual(skuStock.find((item) => item.sku === "AES-061")?.locations, ["Thonglor"]);
+assert.equal(transactionOperation(data.transactions[0]), "IMPORT");
+assert.equal(transactionOperation(data.transactions[4]), "CUT");
 
 const today = createDailyMovements(data.transactions, 1)[0];
 assert.equal(today.added, 4, "daily movement must count imported barcodes");
