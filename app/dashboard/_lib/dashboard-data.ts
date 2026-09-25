@@ -33,6 +33,9 @@ export type StockTransaction = {
   unit: string;
   source: string;
   actor: string;
+  action: string;
+  reason: string;
+  location: string;
 };
 
 export type DailyMovement = {
@@ -47,6 +50,9 @@ export type SkuStockSummary = {
   productName: string;
   barcodes: number;
   openContainers: number;
+  group: string;
+  packageType: string;
+  locations: string[];
 };
 
 export type DashboardData = {
@@ -79,26 +85,50 @@ export function summarizeDashboard(data: DashboardData): DashboardSummary {
   };
 }
 
-export function createSkuStockSummary(inventory: InventoryItem[]): SkuStockSummary[] {
+export function createSkuStockSummary(inventory: InventoryItem[], products: DashboardProduct[] = []): SkuStockSummary[] {
   const bySku = new Map<string, SkuStockSummary>();
 
+  products.forEach((product) => {
+    bySku.set(product.sku, {
+      sku: product.sku,
+      productName: product.name,
+      barcodes: 0,
+      openContainers: 0,
+      group: product.sku.split("-")[0] || "OTHER",
+      packageType: product.packageUnit || product.unit || "Other",
+      locations: [],
+    });
+  });
+
   inventory
-    .filter((item) => item.status === "IN STOCK" && item.quantity > 0)
     .forEach((item) => {
       const current = bySku.get(item.sku) ?? {
         sku: item.sku,
         productName: item.productName,
         barcodes: 0,
         openContainers: 0,
+        group: item.sku.split("-")[0] || "OTHER",
+        packageType: item.packageUnit || item.unit || "Other",
+        locations: [],
       };
-      current.barcodes += 1;
-      if (item.containerType === "OPEN") current.openContainers += 1;
+      if (item.location && !current.locations.includes(item.location)) current.locations.push(item.location);
+      if (item.status === "IN STOCK" && item.quantity > 0) {
+        current.barcodes += 1;
+        if (item.containerType === "OPEN") current.openContainers += 1;
+      }
       bySku.set(item.sku, current);
     });
 
-  return [...bySku.values()].sort((left, right) =>
+  return [...bySku.values()].map((item) => ({ ...item, locations: item.locations.sort() })).sort((left, right) =>
     right.barcodes - left.barcodes || left.sku.localeCompare(right.sku),
   );
+}
+
+export function transactionOperation(transaction: StockTransaction) {
+  const operation = `${transaction.action} ${transaction.source}`.toUpperCase();
+  if (/IMPORT/.test(operation)) return "IMPORT";
+  if (/CUT|SALE|STOCK OUT|USE/.test(operation)) return "CUT";
+  return "ADJUSTMENT";
 }
 
 export function createDailyMovements(transactions: StockTransaction[], days = 7) {
