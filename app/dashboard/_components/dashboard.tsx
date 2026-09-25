@@ -14,6 +14,7 @@ import {
 } from "@tabler/icons-react";
 import {
   createDailyMovements,
+  createSkuStockSummary,
   summarizeDashboard,
   type DashboardData,
 } from "../_lib/dashboard-data";
@@ -57,7 +58,7 @@ export function Dashboard() {
 
   const dailyMovements = useMemo(() => createDailyMovements(data.transactions), [data.transactions]);
   const { inStockItems, activeSkus, quantityOnHand, stockAdded, cutOperations, openContainers } = summarizeDashboard(data);
-  const locations = new Set(inStockItems.map((item) => item.location).filter(Boolean)).size;
+  const skuStock = createSkuStockSummary(inStockItems);
   const recentTransactions = data.transactions.slice(0, 6);
 
   return (
@@ -91,12 +92,16 @@ export function Dashboard() {
                 </section>
 
                 <section className={styles.overviewGrid}>
-                  <article className={styles.activityCard}>
+                  <article className={styles.skuStockCard}>
+                    <div className={styles.panelHeading}><div><p>Stock by product</p><h2>Quantity by SKU</h2></div><button onClick={() => setActiveTab("inventory")}>View Inventory</button></div>
+                    <div className={styles.skuStockList}>{skuStock.map((item) => <div key={item.sku}><div><strong>{item.productName}</strong><small>{item.sku}{item.openContainers ? ` · ${item.openContainers} open` : ""}</small></div><b>{item.barcodes}<small>item{item.barcodes === 1 ? "" : "s"}</small></b></div>)}</div>
+                    {!skuStock.length && state !== "loading" && <div className={styles.noResults}>No in-stock products are recorded in Inventory.</div>}
+                  </article>
+                  <article className={`${styles.activityCard} ${styles.recentActivityCard}`}>
                     <div className={styles.panelHeading}><div><p>Latest activity</p><h2>Recent transactions</h2></div><button onClick={() => setActiveTab("log")}>View Log Data</button></div>
                     <div className={styles.activityList}>{recentTransactions.map((item) => <div key={item.id}><span className={item.type === "IN" ? styles.activityIn : styles.activityOut}>{item.type === "IN" ? <IconArrowUpRight size={17} /> : <IconArrowDownRight size={17} />}</span><div><strong>{item.productName}</strong><small>{item.sku} · {new Date(item.occurredAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} · {new Date(item.occurredAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</small></div><b className={item.type === "IN" ? styles.positive : styles.negative}>{item.type === "IN" ? "+" : ""}{item.quantity} {item.unit}</b></div>)}</div>
                     {!recentTransactions.length && state !== "loading" && <div className={styles.noResults}>No transactions are recorded in Log Data.</div>}
                   </article>
-                  <article className={styles.explainerCard}><span><IconDatabase size={25} /></span><p>Data source</p><h2>Connected to Google Sheets</h2><p>Products, physical inventory and movement history are loaded from the MedStock workbook whenever this dashboard is refreshed.</p><div><strong>Sheets</strong><span>Product List · Inventory · Log Data</span></div><div><strong>Waiting for import</strong><span>{data.waitingForImport} barcode{data.waitingForImport === 1 ? "" : "s"}</span></div><div><strong>Stock locations</strong><span>{locations}</span></div></article>
                 </section>
               </>
             ) : activeTab === "inventory" ? <InventoryTable inventory={data.inventory} /> : <TransactionTable transactions={data.transactions} query={query} typeFilter={typeFilter} onQueryChange={setQuery} onTypeChange={setTypeFilter} />}

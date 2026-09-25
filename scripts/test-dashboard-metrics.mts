@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createDailyMovements, summarizeDashboard, type DashboardData } from "../app/dashboard/_lib/dashboard-data.ts";
+import { createDailyMovements, createSkuStockSummary, summarizeDashboard, type DashboardData } from "../app/dashboard/_lib/dashboard-data.ts";
 
 const data: DashboardData = {
   products: [],
@@ -26,6 +26,13 @@ assert.equal(summary.stockAdded, 4, "four imported barcodes must report as four 
 assert.equal(summary.cutOperations, 1);
 assert.equal(summary.activeSkus, 3);
 assert.equal(summary.openContainers, 1);
+
+const skuStock = createSkuStockSummary(data.inventory);
+assert.deepEqual(skuStock.map((item) => [item.sku, item.barcodes, item.openContainers]), [
+  ["AES-058", 1, 0],
+  ["AES-061", 1, 1],
+  ["PEN-003", 1, 0],
+]);
 
 const today = createDailyMovements(data.transactions, 1)[0];
 assert.equal(today.added, 4, "daily movement must count imported barcodes");
