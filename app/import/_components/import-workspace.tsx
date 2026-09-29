@@ -54,6 +54,23 @@ function localDate() {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 }
 
+function importDateDefaults(dateValue: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) return { lot: "", expiry: "" };
+
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const lastDayOfExpiryMonth = new Date(Date.UTC(year + 2, month, 0)).getUTCDate();
+  const expiryDay = Math.min(day, lastDayOfExpiryMonth);
+
+  return {
+    lot: `${dayText}${monthText}${yearText}`,
+    expiry: `${year + 2}-${monthText}-${String(expiryDay).padStart(2, "0")}`,
+  };
+}
+
 function parseBarcode(rawBarcode: string): ParsedBarcode {
   const barcode = rawBarcode.trim().toUpperCase();
   const match = barcode.match(BARCODE_PATTERN);
@@ -87,14 +104,16 @@ function queueErrors(item: QueueItem, duplicateCount: number, inventoryIds: Set<
 
 export function ImportWorkspace() {
   const barcodeRef = useRef<HTMLInputElement>(null);
+  const initialImportDate = useRef(localDate()).current;
+  const initialImportDefaults = useRef(importDateDefaults(initialImportDate)).current;
   const [source, setSource] = useState<DashboardData | null>(null);
   const [sourceState, setSourceState] = useState<"loading" | "ready" | "error">("loading");
   const [sourceError, setSourceError] = useState("");
   const [branch, setBranch] = useState<Branch>("Thonglor");
-  const [receivedDate, setReceivedDate] = useState(localDate);
+  const [receivedDate, setReceivedDate] = useState(initialImportDate);
   const [barcode, setBarcode] = useState("");
-  const [lot, setLot] = useState("");
-  const [expiry, setExpiry] = useState("");
+  const [lot, setLot] = useState(initialImportDefaults.lot);
+  const [expiry, setExpiry] = useState(initialImportDefaults.expiry);
   const [quantity, setQuantity] = useState(1);
   const [autoAdd, setAutoAdd] = useState(true);
   const [scannedProduct, setScannedProduct] = useState<DashboardProduct | null>(null);
@@ -139,9 +158,10 @@ export function ImportWorkspace() {
   useEffect(() => { void loadSource(); }, []);
 
   const clearInput = () => {
+    const defaults = importDateDefaults(receivedDate);
     setBarcode("");
-    setLot("");
-    setExpiry("");
+    setLot(defaults.lot);
+    setExpiry(defaults.expiry);
     setQuantity(1);
     setScannedProduct(null);
     setValidation("Scan a barcode to begin");
@@ -192,7 +212,7 @@ export function ImportWorkspace() {
       setQuantity(importQuantity(result.product));
       setValidation("READY TO ADD");
       setValidationType("ready");
-      if (autoAdd) addQueueItem(result.parsed, result.product, "", "", importQuantity(result.product));
+      if (autoAdd) addQueueItem(result.parsed, result.product, lot, expiry, importQuantity(result.product));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to validate barcode";
       setScannedProduct(null);
@@ -231,6 +251,20 @@ export function ImportWorkspace() {
     setQueue((current) => current.map((item) => ({ ...item, location: nextBranch })));
     if (queue.length) setBatchStatus("QUEUE CHANGED — IMPORT WILL RECHECK");
     requestAnimationFrame(() => barcodeRef.current?.focus());
+  };
+
+  const changeReceivedDate = (nextDate: string) => {
+    const previousDefaults = importDateDefaults(receivedDate);
+    const nextDefaults = importDateDefaults(nextDate);
+    setReceivedDate(nextDate);
+    setLot((current) => !current || current === previousDefaults.lot ? nextDefaults.lot : current);
+    setExpiry((current) => !current || current === previousDefaults.expiry ? nextDefaults.expiry : current);
+    setQueue((current) => current.map((item) => ({
+      ...item,
+      lot: !item.lot || item.lot === previousDefaults.lot ? nextDefaults.lot : item.lot,
+      expiry: !item.expiry || item.expiry === previousDefaults.expiry ? nextDefaults.expiry : item.expiry,
+    })));
+    if (queue.length) setBatchStatus("QUEUE CHANGED — IMPORT WILL RECHECK");
   };
 
   const deleteSelected = () => {
@@ -317,11 +351,11 @@ export function ImportWorkspace() {
 
             <div className={styles.formGrid}>
               <label><span>Current branch</span><select value={branch} onChange={(event) => changeBranch(event.target.value as Branch)}><option>Thonglor</option><option>Silom</option></select></label>
-              <label><span>Received date</span><input type="date" value={receivedDate} onChange={(event) => { setReceivedDate(event.target.value); if (queue.length) setBatchStatus("QUEUE CHANGED — IMPORT WILL RECHECK"); }} /></label>
+              <label><span>Received date</span><input type="date" value={receivedDate} onChange={(event) => changeReceivedDate(event.target.value)} /></label>
               <label className={styles.fullField}><span>Scanned product</span><input value={scannedProduct?.name ?? ""} placeholder="Waiting for barcode" readOnly /></label>
               <label><span>SKU</span><input value={scannedProduct?.sku ?? ""} placeholder="—" readOnly /></label>
               <label><span>Track mode</span><input value={scannedProduct?.trackMode ?? ""} placeholder="—" readOnly /></label>
-              <label><span>Lot <em>Optional</em></span><input value={lot} onChange={(event) => setLot(event.target.value)} placeholder="Lot number" disabled={!scannedProduct} /></label>
+              <label><span>Lot <em>Optional</em></span><input value={lot} onChange={(event) => setLot(event.target.value)} placeholder="DDMMYYYY" disabled={!scannedProduct} /></label>
               <label><span>Expiry date <em>Optional</em></span><input type="date" value={expiry} onChange={(event) => setExpiry(event.target.value)} disabled={!scannedProduct} /></label>
               <label><span>{scannedProduct && isPacked(scannedProduct) ? `Contents per ${scannedProduct.packageUnit} (${scannedProduct.unit})` : `Quantity ${scannedProduct ? `(${scannedProduct.unit})` : ""}`}</span><input type="number" min="0.001" step="0.001" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} disabled={!scannedProduct || isPacked(scannedProduct) || scannedProduct.trackMode.toUpperCase() === "UNIT"} /></label>
             </div>
