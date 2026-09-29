@@ -86,6 +86,10 @@ export function Dashboard() {
   const allSkuStock = useMemo(() => createSkuStockSummary(data.inventory, data.products), [data.inventory, data.products]);
   const groups = useMemo(() => Array.from(new Set(allSkuStock.map((item) => item.group))).sort(), [allSkuStock]);
   const packageTypes = useMemo(() => Array.from(new Set(allSkuStock.map((item) => item.packageType).filter(Boolean))).sort(), [allSkuStock]);
+  const refundedQuantityBySale = useMemo(() => data.transactions.reduce<Record<string, number>>((totals, item) => {
+    if (item.action === "REFUND" && item.reference) totals[item.reference] = (totals[item.reference] || 0) + Math.max(0, item.quantity);
+    return totals;
+  }, {}), [data.transactions]);
   const skuStock = useMemo(() => {
     const normalizedQuery = stockQuery.trim().toLowerCase();
     const locationInventory = stockLocation === "ALL" ? data.inventory : data.inventory.filter((item) => item.location === stockLocation);
@@ -112,7 +116,7 @@ export function Dashboard() {
     const normalizedQuery = transactionQuery.trim().toLowerCase();
     return data.transactions.filter((item) => {
       const itemDate = bangkokDateKey(item.occurredAt);
-      return (!normalizedQuery || [item.id, item.barcode || "", item.sku, item.productName].some((value) => value.toLowerCase().includes(normalizedQuery)))
+      return (!normalizedQuery || [item.id, item.barcode || "", item.sku, item.productName, item.actor].some((value) => value.toLowerCase().includes(normalizedQuery)))
         && (operationFilter === "ALL" || transactionOperation(item) === operationFilter)
         && (reasonFilter === "ALL" || item.reason === reasonFilter)
         && (actorFilter === "ALL" || item.actor === actorFilter)
@@ -121,7 +125,7 @@ export function Dashboard() {
         && (!dateTo || itemDate <= dateTo);
     });
   }, [actorFilter, data.transactions, dateFrom, dateTo, operationFilter, reasonFilter, transactionLocation, transactionQuery]);
-  const recentTransactions = filteredTransactions.slice(0, 6);
+  const recentTransactions = data.transactions.slice(0, 6);
   const resetStockFilters = () => { setStockQuery(""); setStockGroup("ALL"); setStockStatus("IN_STOCK"); setStockPackage("ALL"); setStockLocation("ALL"); setStockSort("QUANTITY_DESC"); };
   const resetTransactionFilters = () => { setTransactionQuery(""); setOperationFilter("ALL"); setReasonFilter("ALL"); setActorFilter("ALL"); setTransactionLocation("ALL"); setDateFrom(""); setDateTo(""); };
 
@@ -172,23 +176,23 @@ export function Dashboard() {
                   </article>
                   <article className={`${styles.activityCard} ${styles.recentActivityCard}`}>
                     <div className={styles.panelHeading}><div><p>Latest activity</p><h2>Recent transactions</h2></div><button onClick={() => setActiveTab("log")}>View Log Data</button></div>
-                    <div className={`${styles.cardFilters} ${styles.transactionFilters}`}>
-                      <label className={styles.filterSearch}><span>Search</span><div><IconSearch size={14} /><input aria-label="Search recent transactions" value={transactionQuery} onChange={(event) => setTransactionQuery(event.target.value)} placeholder="Product, SKU, barcode, or unique ID" /></div></label>
-                      <label><span>Operation</span><select value={operationFilter} onChange={(event) => setOperationFilter(event.target.value)}><option value="ALL">All operations</option><option value="IMPORT">Import</option><option value="CUT">Cut</option><option value="ADJUSTMENT">Adjustment</option></select></label>
-                      <label><span>Reason</span><select value={reasonFilter} onChange={(event) => setReasonFilter(event.target.value)}><option value="ALL">All reasons</option>{reasons.map((value) => <option key={value}>{value}</option>)}</select></label>
-                      <label><span>User</span><select value={actorFilter} onChange={(event) => setActorFilter(event.target.value)}><option value="ALL">All users</option>{actors.map((value) => <option key={value}>{value}</option>)}</select></label>
-                      <label><span>Location</span><select value={transactionLocation} onChange={(event) => setTransactionLocation(event.target.value)}><option value="ALL">All locations</option>{transactionLocations.map((value) => <option key={value}>{value}</option>)}</select></label>
-                      <label><span>From</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
-                      <label><span>To</span><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
-                    </div>
-                    <div className={styles.filterSummary}><span>{filteredTransactions.length} matching transactions</span><button onClick={resetTransactionFilters}>Reset filters</button></div>
                     <div className={styles.activityList}>{recentTransactions.map((item) => <div key={item.id}><span className={item.type === "IN" ? styles.activityIn : styles.activityOut}>{item.type === "IN" ? <IconArrowUpRight size={17} /> : <IconArrowDownRight size={17} />}</span><div><strong>{item.productName}</strong><small>{item.sku} · {item.reason}{item.location ? ` · ${item.location}` : ""} · {formatBangkokDateTime(item.occurredAt)} ICT</small><code className={styles.activityBarcode}>{item.barcode || item.id}</code></div><b className={item.type === "IN" ? styles.positive : styles.negative}>{item.type === "IN" ? "+" : ""}{item.quantity} {item.unit}</b></div>)}</div>
                     {!recentTransactions.length && state !== "loading" && <div className={styles.noResults}>No transactions are recorded in Log Data.</div>}
                   </article>
                 </section>
                 <section className={styles.historySection} aria-label="Transaction history">
                   <div className={styles.panelHeading}><div><p>Browse past movements</p><h2>Transaction history</h2></div><span>Times in Bangkok (ICT)</span></div>
-                  <TransactionTable key={JSON.stringify([transactionQuery, operationFilter, reasonFilter, actorFilter, transactionLocation, dateFrom, dateTo])} transactions={filteredTransactions} query="" typeFilter="ALL" onQueryChange={setTransactionQuery} onTypeChange={setTypeFilter} showFilters={false} />
+                  <div className={`${styles.cardFilters} ${styles.transactionFilters} ${styles.historyFilters}`}>
+                    <label className={styles.filterSearch}><span>Search</span><div><IconSearch size={14} /><input aria-label="Search transaction history" value={transactionQuery} onChange={(event) => setTransactionQuery(event.target.value)} placeholder="Barcode, transaction ID, product, SKU, or user" /></div></label>
+                    <label><span>Operation</span><select value={operationFilter} onChange={(event) => setOperationFilter(event.target.value)}><option value="ALL">All operations</option><option value="IMPORT">Import</option><option value="CUT">Cut</option><option value="REFUND">Refund</option><option value="ADJUSTMENT">Adjustment</option></select></label>
+                    <label><span>Reason</span><select value={reasonFilter} onChange={(event) => setReasonFilter(event.target.value)}><option value="ALL">All reasons</option>{reasons.map((value) => <option key={value}>{value}</option>)}</select></label>
+                    <label><span>User</span><select value={actorFilter} onChange={(event) => setActorFilter(event.target.value)}><option value="ALL">All users</option>{actors.map((value) => <option key={value}>{value}</option>)}</select></label>
+                    <label><span>Location</span><select value={transactionLocation} onChange={(event) => setTransactionLocation(event.target.value)}><option value="ALL">All locations</option>{transactionLocations.map((value) => <option key={value}>{value}</option>)}</select></label>
+                    <label><span>From</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
+                    <label><span>To</span><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
+                  </div>
+                  <div className={styles.filterSummary}><span>{filteredTransactions.length} matching transactions</span><button onClick={resetTransactionFilters}>Reset filters</button></div>
+                  <TransactionTable key={JSON.stringify([transactionQuery, operationFilter, reasonFilter, actorFilter, transactionLocation, dateFrom, dateTo])} transactions={filteredTransactions} query="" typeFilter="ALL" onQueryChange={setTransactionQuery} onTypeChange={setTypeFilter} showFilters={false} refundedQuantityBySale={refundedQuantityBySale} onRefundComplete={loadDashboard} />
                 </section>
               </>
             ) : activeTab === "inventory" ? <><div className={styles.inventoryScope}>{inventoryScope && <><div><strong>Opened stock · {inventoryScope.productName}</strong><span>{inventoryScope.sku} · {inventoryScope.location === "ALL" ? "All locations" : inventoryScope.location} · {scopedInventory.length} opened barcodes with remaining stock</span></div><button onClick={showAllInventory}>View all inventory</button></>}</div><InventoryTable key={inventoryScope ? `${inventoryScope.sku}-${inventoryScope.location}` : "all"} inventory={scopedInventory} /></> : <TransactionTable transactions={data.transactions} query={query} typeFilter={typeFilter} onQueryChange={setQuery} onTypeChange={setTypeFilter} />}

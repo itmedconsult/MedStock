@@ -39,6 +39,7 @@ export type StockTransaction = {
   action: string;
   reason: string;
   location: string;
+  reference?: string;
 };
 
 export type DailyMovement = {
@@ -82,7 +83,7 @@ export function summarizeDashboard(data: DashboardData): DashboardSummary {
     inStockItems,
     activeSkus: new Set(inStockItems.map((item) => item.sku)).size,
     quantityOnHand: inStockItems.length,
-    stockAdded: data.transactions.filter((item) => item.type === "IN").length,
+    stockAdded: data.transactions.filter((item) => transactionOperation(item) === "IMPORT").length,
     cutOperations: data.transactions.filter((item) => item.type === "OUT").length,
     openContainers: inStockItems.filter((item) => item.containerType === "OPEN").length,
   };
@@ -129,6 +130,7 @@ export function createSkuStockSummary(inventory: InventoryItem[], products: Dash
 
 export function transactionOperation(transaction: StockTransaction) {
   const operation = `${transaction.action} ${transaction.source}`.toUpperCase();
+  if (/REFUND/.test(operation)) return "REFUND";
   if (/IMPORT/.test(operation)) return "IMPORT";
   if (/CUT|SALE|STOCK OUT|USE/.test(operation)) return "CUT";
   return "ADJUSTMENT";
@@ -149,7 +151,7 @@ export function createDailyMovements(transactions: StockTransaction[], days = 7)
     movements.push({
       key,
       label: date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
-      added: dailyTransactions.filter((item) => item.type === "IN").length,
+      added: dailyTransactions.filter((item) => transactionOperation(item) === "IMPORT").length,
       cut: dailyTransactions.filter((item) => item.type === "OUT").length,
     });
   }

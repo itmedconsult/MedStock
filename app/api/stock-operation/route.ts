@@ -1,4 +1,4 @@
-type StockOperation = "check" | "cut";
+type StockOperation = "check" | "cut" | "refund";
 type OperationRequest = { operation?: unknown; branch?: unknown; items?: unknown };
 type SheetResponse = { ok?: boolean; batchId?: string; processedCount?: number; error?: string };
 
@@ -20,6 +20,16 @@ function sanitizeItems(value: unknown, operation: StockOperation) {
   const seen = new Set<string>();
   return value.map((value, index) => {
     const row = typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+    if (operation === "refund") {
+      const transactionId = text(row.transactionId, 80).toUpperCase();
+      const refundQuantity = number(row.refundQuantity, `Row ${index + 1} refund quantity`);
+      if (!transactionId) throw new Error(`Row ${index + 1} is missing a sale transaction ID.`);
+      if (seen.has(transactionId)) throw new Error(`Duplicate sale transaction: ${transactionId}`);
+      if (refundQuantity <= 0) throw new Error(`Row ${index + 1} refund quantity must be greater than zero.`);
+      if (row.restockableConfirmed !== true) throw new Error(`Row ${index + 1} must confirm the returned stock is unopened and ready for sale.`);
+      seen.add(transactionId);
+      return { transactionId, refundQuantity, restockableConfirmed: true };
+    }
     const id = text(row.id, 64).toUpperCase();
     if (!id) throw new Error(`Row ${index + 1} is missing a barcode.`);
     if (seen.has(id)) throw new Error(`Duplicate barcode: ${id}`);
@@ -49,13 +59,13 @@ export async function POST(request: Request) {
     const body = await request.json() as OperationRequest;
     const operation = text(body.operation, 10) as StockOperation;
     const branch = text(body.branch, 30);
-    if (operation !== "check" && operation !== "cut") throw new Error("Unsupported stock operation.");
+    if (operation !== "check" && operation !== "cut" && operation !== "refund") throw new Error("Unsupported stock operation.");
     if (!BRANCHES.has(branch)) throw new Error("Select a valid branch.");
     const items = sanitizeItems(body.items, operation);
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: operation === "check" ? "checkStockBatch" : "cutStockBatch", token, branch, items }),
+      body: JSON.stringify({ action: operation === "check" ? "checkStockBatch" : operation === "cut" ? "cutStockBatch" : "refundStockBatch", token, branch, items }),
       cache: "no-store",
       redirect: "follow",
     });
