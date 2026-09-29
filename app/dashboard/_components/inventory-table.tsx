@@ -35,7 +35,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return inventory.filter((item) => {
-      const matchesQuery = !normalizedQuery || [item.id, item.sku, item.productName]
+      const matchesQuery = !normalizedQuery || [item.barcode || "", item.id, item.sku, item.productName]
         .some((value) => value.toLowerCase().includes(normalizedQuery));
       const matchesLocation = location === "ALL" || item.location === location;
       const matchesStatus = status === "ALL" || item.status === status;
@@ -140,7 +140,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
           <tbody>
             {filtered.map((item) => (
               <tr key={item.id}>
-                <td><code>{item.id}</code></td>
+                <td><code>{item.barcode || item.id}</code></td>
                 <td><strong>{item.productName}</strong><small>{item.sku}</small></td>
                 <td><strong>{item.location || "—"}</strong></td>
                 <td><strong>{displayDate(item.lot)}</strong></td>

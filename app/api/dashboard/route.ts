@@ -57,6 +57,7 @@ function inventoryItem(value: unknown): InventoryItem | null {
   if (!id || !sku) return null;
   return {
     id,
+    barcode: text(item.barcode, text(item.barcodeValue)),
     sku,
     productName: text(item.productName, sku),
     unit: text(item.unit, "units"),

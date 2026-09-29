@@ -66,7 +66,7 @@ function medStockWebApiDashboard_(ss) {
       const sku = String(row[1] || "").trim().toUpperCase();
       if (!id || !sku) return;
       const product = bySku[sku] || {};
-      inventory.push({ id: id, sku: sku, productName: String(row[2] || product.name || sku).trim(),
+      inventory.push({ id: id, barcode: String(row[10] || "").trim(), sku: sku, productName: String(row[2] || product.name || sku).trim(),
         unit: String(row[4] || product.unit || "units").trim(), lot: medStockWebApiDateOnly_(row[5], ss),
         location: String(row[7] || "").trim(),
         status: String(row[8] || "").trim().toUpperCase(), quantity: medStockWebApiNumber_(row[9]),

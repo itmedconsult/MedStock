@@ -10,6 +10,7 @@ export type DashboardProduct = {
 
 export type InventoryItem = {
   id: string;
+  barcode?: string;
   sku: string;
   productName: string;
   unit: string;

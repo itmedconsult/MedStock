@@ -29,7 +29,7 @@ export function TransactionTable({ transactions, query, typeFilter, onQueryChang
   return (
     <section className={styles.logPanel}>
       {showFilters && <div className={styles.logToolbar}>
-        <div className={styles.logSearch}><IconSearch size={18} /><input value={query} aria-label="Search transaction history" onChange={(event) => { setPage(1); onQueryChange(event.target.value); }} placeholder="Search barcode, transaction, product, or SKU" /></div>
+        <div className={styles.logSearch}><IconSearch size={18} /><input value={query} aria-label="Search transaction history" onChange={(event) => { setPage(1); onQueryChange(event.target.value); }} placeholder="Search barcode, unique ID, product, or SKU" /></div>
         <div className={styles.filterGroup} aria-label="Transaction type filter">
           {(["ALL", "IN", "OUT"] as const).map((type) => <button className={typeFilter === type ? styles.activeFilter : ""} onClick={() => { setPage(1); onTypeChange(type); }} key={type}>{type === "ALL" ? "All" : type === "IN" ? "Stock in" : "Cut stock"}</button>)}
         </div>
@@ -37,13 +37,12 @@ export function TransactionTable({ transactions, query, typeFilter, onQueryChang
 
       <div className={styles.tableScroll}>
         <table className={styles.logTable}>
-          <thead><tr><th>Date & time (ICT)</th><th>Barcode / Unique ID</th><th>Transaction</th><th>Product</th><th>Movement</th><th>Balance</th><th>Reason / Location</th><th>Source</th></tr></thead>
+          <thead><tr><th>Date & time (ICT)</th><th>Barcode / Unique ID</th><th>Product</th><th>Movement</th><th>Balance</th><th>Reason / Location</th><th>Source</th></tr></thead>
           <tbody>
             {visible.map((item) => (
               <tr key={item.id}>
                 <td><time dateTime={item.occurredAt}>{formatBangkokDateTime(item.occurredAt)}</time></td>
-                <td><code>{item.barcode || "—"}</code></td>
-                <td><code>{item.id}</code></td>
+                <td><code>{item.barcode || item.id}</code></td>
                 <td><strong>{item.productName}</strong><small>{item.sku}</small></td>
                 <td><span className={item.type === "IN" ? styles.stockIn : styles.stockOut}>{item.type === "IN" ? "+" : ""}{item.quantity} {item.unit}</span></td>
                 <td>{item.balance} {item.unit}</td>
