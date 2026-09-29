@@ -60,6 +60,7 @@ function inventoryItem(value: unknown): InventoryItem | null {
     sku,
     productName: text(item.productName, sku),
     unit: text(item.unit, "units"),
+    lot: text(item.lot),
     location: text(item.location),
     status: text(item.status).toUpperCase(),
     quantity: number(item.quantity),
