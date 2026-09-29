@@ -605,3 +605,100 @@ function medStockStockCopyRowFormat_(sheet, startRow, rowCount, columnCount) {
     false
   );
 }
+
+function migrateLegacyLotDatesToImportDates() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const inventory = ss.getSheetByName(MEDSTOCK_STOCK_API.INVENTORY_SHEET);
+  const log = ss.getSheetByName(MEDSTOCK_STOCK_API.LOG_SHEET);
+  const backupName = "Lot_Migration_Backup_20260929";
+  if (!inventory || !log) throw new Error("Inventory or Log Data sheet is missing.");
+  if (ss.getSheetByName(backupName)) throw new Error(backupName + " already exists; migration was already prepared or completed.");
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const inventoryCount = Math.max(0, inventory.getLastRow() - 1);
+    const logCount = Math.max(0, log.getLastRow() - 1);
+    const inventoryRows = inventoryCount ? inventory.getRange(2, 1, inventoryCount, 12).getValues() : [];
+    const logRows = logCount ? log.getRange(2, 1, logCount, 8).getValues() : [];
+    const importedAtByBarcode = {};
+
+    logRows.forEach(function(row) {
+      const barcode = String(row[2] || "").trim().toUpperCase();
+      const action = String(row[7] || "").trim().toUpperCase();
+      const date = medStockMigrationDate_(row[0]);
+      if (!barcode || action !== "IMPORT" || !date) return;
+      if (!importedAtByBarcode[barcode] || date < importedAtByBarcode[barcode]) importedAtByBarcode[barcode] = date;
+    });
+
+    const migratedAtByBarcode = {};
+    const inventoryLots = [];
+    const backupRows = [];
+    let inventoryMigrated = 0;
+    let inventorySkipped = 0;
+
+    inventoryRows.forEach(function(row, index) {
+      const barcode = String(row[0] || row[10] || "").trim().toUpperCase();
+      const targetDate = medStockMigrationDate_(row[11]) || importedAtByBarcode[barcode] || null;
+      if (!barcode || !targetDate) {
+        inventoryLots.push([row[5] || ""]);
+        inventorySkipped += 1;
+        return;
+      }
+      backupRows.push(["Inventory", index + 2, barcode, row[5] || "", targetDate]);
+      inventoryLots.push([targetDate]);
+      migratedAtByBarcode[barcode] = targetDate;
+      inventoryMigrated += 1;
+    });
+
+    const logLots = [];
+    let logMigrated = 0;
+    logRows.forEach(function(row, index) {
+      const barcode = String(row[2] || "").trim().toUpperCase();
+      const targetDate = migratedAtByBarcode[barcode] || null;
+      if (!targetDate) {
+        logLots.push([row[5] || ""]);
+        return;
+      }
+      backupRows.push(["Log Data", index + 2, barcode, row[5] || "", targetDate]);
+      logLots.push([targetDate]);
+      logMigrated += 1;
+    });
+
+    const backup = ss.insertSheet(backupName);
+    backup.getRange(1, 1, 1, 5).setValues([["Source Sheet", "Source Row", "Unique ID", "Previous Lot", "Migrated Lot"]]);
+    if (backupRows.length) backup.getRange(2, 1, backupRows.length, 5).setValues(backupRows);
+    backup.getRange("E:E").setNumberFormat("dd/MM/yyyy");
+    backup.setFrozenRows(1);
+
+    if (inventoryLots.length) inventory.getRange(2, 6, inventoryLots.length, 1).setValues(inventoryLots).setNumberFormat("dd/MM/yyyy");
+    if (logLots.length) log.getRange(2, 6, logLots.length, 1).setValues(logLots).setNumberFormat("dd/MM/yyyy");
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      backupSheet: backupName,
+      inventoryMigrated: inventoryMigrated,
+      inventorySkipped: inventorySkipped,
+      logMigrated: logMigrated
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function medStockMigrationDate_(value) {
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value)) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  const text = String(value || "").trim();
+  let match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (match) return medStockMigrationDateParts_(Number(match[1]), Number(match[2]), Number(match[3]));
+  match = /^(\d{2})(?:[\/-]?)(\d{2})(?:[\/-]?)(\d{4})$/.exec(text);
+  if (match) return medStockMigrationDateParts_(Number(match[3]), Number(match[2]), Number(match[1]));
+  return null;
+}
+
+function medStockMigrationDateParts_(year, month, day) {
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
+}
