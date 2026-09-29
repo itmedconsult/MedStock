@@ -84,7 +84,9 @@ function medStockWebApiDashboard_(ss) {
       const before = medStockWebApiNumber_(row[12]);
       const after = medStockWebApiNumber_(row[13]);
       let movement = medStockWebApiNumber_(row[8]);
-      const action = String(row[7] || "").trim().toUpperCase();
+      const rawAction = String(row[7] || "").trim().toUpperCase();
+      const source = String(row[16] || rawAction || "Log Data").trim();
+      const action = rawAction === "RETURN" && source.toUpperCase().indexOf("REFUND") !== -1 ? "REFUND" : rawAction;
       if (String(row[16] || "") === "Pack Correction") return;
       const delta = after - before;
       if (delta !== 0) movement = delta;
@@ -95,7 +97,7 @@ function medStockWebApiDashboard_(ss) {
       transactions.push({ id: id || "LOG-" + String(index + 2), barcode: String(row[2] || "").trim(), occurredAt: medStockWebApiIso_(row[0], ss),
         type: movement < 0 ? "OUT" : "IN", sku: sku, productName: String(row[4] || product.name || sku).trim(),
         quantity: movement, balance: after, unit: String(row[18] || product.unit || "units").trim(),
-        source: String(row[16] || action || "Log Data").trim(), actor: String(row[10] || "Spreadsheet User").trim(),
+        source: source, actor: String(row[10] || "Spreadsheet User").trim(),
         action: action, reason: action === "STOCK OUT" ? "USE" : action,
         location: String(row[9] || "").trim(), reference: String(row[11] || "").trim() });
     });

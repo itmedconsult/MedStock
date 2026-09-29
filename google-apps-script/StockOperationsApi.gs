@@ -611,7 +611,9 @@ function medStockRefundStockBatch_(body, ss) {
       logValues.forEach(function(row) {
         const action = String(row[7] || "").trim().toUpperCase();
         const reference = String(row[11] || "").trim().toUpperCase();
-        if (action === "REFUND" && reference === item.transactionId) refunded += Math.max(0, Number(row[8]) || 0);
+        const source = String(row[16] || "").trim().toUpperCase();
+        const isRefund = action === "REFUND" || (action === "RETURN" && source.indexOf("REFUND") !== -1);
+        if (isRefund && reference === item.transactionId) refunded += Math.max(0, Number(row[8]) || 0);
       });
       refunded = medStockStockRound_(refunded);
       const refundable = medStockStockRound_(saleQuantity - refunded);
@@ -665,7 +667,7 @@ function medStockRefundStockBatch_(body, ss) {
     const logRows = items.map(function(item, index) {
       return [
         now, batchId + "-" + String(index + 1).padStart(3, "0"), item.uniqueId, item.sku, item.productName,
-        item.row[5] || "", item.row[6] || "", "REFUND", item.amount, item.branch, staff, item.transactionId,
+        item.row[5] || "", item.row[6] || "", "RETURN", item.amount, item.branch, staff, item.transactionId,
         item.quantityBefore, item.quantityAfter, item.typeAfter, item.sku.split("-")[0], "Refund Stock API",
         "Restockable customer return; original sale " + item.transactionId
       ];

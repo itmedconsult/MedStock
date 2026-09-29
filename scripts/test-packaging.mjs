@@ -21,7 +21,12 @@ class Sheet {
     const range = {
       getValues: () => Array.from({length: h}, (_, y) => Array.from({length: w}, (_, x) => sheet.rows[r+y-1]?.[c+x-1] ?? '')),
       getDisplayValues: () => range.getValues().map(row => row.map(String)),
-      setValues: values => { values.forEach((row, y) => { sheet.rows[r+y-1] ??= []; row.forEach((v, x) => sheet.rows[r+y-1][c+x-1] = v); }); return range; },
+      setValues: values => { values.forEach((row, y) => { sheet.rows[r+y-1] ??= []; row.forEach((v, x) => {
+        if (sheet.name === 'Log Data' && c+x-1 === 7 && v && !['IMPORT','STOCK IN','STOCK OUT','SALE','CHECK STOCK','ADJUSTMENT','OPEN','USED UP','TRANSFER','RETURN','EXPIRED','DAMAGED'].includes(String(v).toUpperCase())) {
+          throw new Error(`The data entered in Action violates the data validation rules: ${v}`);
+        }
+        sheet.rows[r+y-1][c+x-1] = v;
+      }); }); return range; },
       setValue: v => range.setValues([[v]]),
       copyTo: () => {}, clearContent: () => range.setValues(Array.from({length:h},()=>Array(w).fill(''))),
       setNumberFormat: () => range,
@@ -113,6 +118,7 @@ console.log('PASS: box import/cut/check, duplicate and invalid input rejection, 
   assert.equal(t.sheets.Inventory.rows[1][9],1);
   assert.equal(t.sheets.Inventory.rows[1][8],'IN STOCK');
   assert.equal(t.sheets.Inventory.rows[1][13],'OPEN');
+  assert.equal(t.sheets['Log Data'].rows.at(-1)[7],'RETURN');
   const refundTransaction=t.ctx.medStockWebApiDashboard_(t.ss).transactions[0];
   assert.equal(refundTransaction.action,'REFUND');
   assert.equal(refundTransaction.reference,saleId);
