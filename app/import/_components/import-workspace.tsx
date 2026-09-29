@@ -66,7 +66,7 @@ function importDateDefaults(dateValue: string) {
   const expiryDay = Math.min(day, lastDayOfExpiryMonth);
 
   return {
-    lot: `${dayText}${monthText}${yearText}`,
+    lot: dateValue,
     expiry: `${year + 2}-${monthText}-${String(expiryDay).padStart(2, "0")}`,
   };
 }
@@ -355,7 +355,7 @@ export function ImportWorkspace() {
               <label className={styles.fullField}><span>Scanned product</span><input value={scannedProduct?.name ?? ""} placeholder="Waiting for barcode" readOnly /></label>
               <label><span>SKU</span><input value={scannedProduct?.sku ?? ""} placeholder="—" readOnly /></label>
               <label><span>Track mode</span><input value={scannedProduct?.trackMode ?? ""} placeholder="—" readOnly /></label>
-              <label><span>Lot <em>Optional</em></span><input value={lot} onChange={(event) => setLot(event.target.value)} placeholder="DDMMYYYY" disabled={!scannedProduct} /></label>
+              <label><span>Lot <em>Optional</em></span><input type="date" value={lot} onChange={(event) => setLot(event.target.value)} disabled={!scannedProduct} /></label>
               <label><span>Expiry date <em>Optional</em></span><input type="date" value={expiry} onChange={(event) => setExpiry(event.target.value)} disabled={!scannedProduct} /></label>
               <label><span>{scannedProduct && isPacked(scannedProduct) ? `Contents per ${scannedProduct.packageUnit} (${scannedProduct.unit})` : `Quantity ${scannedProduct ? `(${scannedProduct.unit})` : ""}`}</span><input type="number" min="0.001" step="0.001" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} disabled={!scannedProduct || isPacked(scannedProduct) || scannedProduct.trackMode.toUpperCase() === "UNIT"} /></label>
             </div>
@@ -378,7 +378,7 @@ export function ImportWorkspace() {
                 <tbody>
                   {queue.map((item) => {
                     const errors = rowErrors.get(item.barcode) ?? [];
-                    return <tr key={item.barcode} className={errors.length ? styles.invalidRow : ""}><td><input aria-label={`Select ${item.barcode}`} type="checkbox" checked={selected.has(item.barcode)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(item.barcode); else next.delete(item.barcode); return next; })} /></td><td><code>{item.barcode}</code><small>{item.sku}</small></td><td><strong>{item.productName}</strong><small>{item.trackMode} · {item.unit}{isPacked(item) ? ` · 1 ${item.packageUnit} = ${item.unitsPerPack} ${item.unit}` : ""}</small></td><td><input value={item.lot} onChange={(event) => updateQueueItem(item.barcode, { lot: event.target.value })} placeholder="Optional" /></td><td><input type="date" value={item.expiry} onChange={(event) => updateQueueItem(item.barcode, { expiry: event.target.value })} /></td><td><input className={styles.qtyInput} type="number" min="0.001" step="0.001" value={item.quantity} disabled={isPacked(item) || item.trackMode === "UNIT"} onChange={(event) => updateQueueItem(item.barcode, { quantity: Number(event.target.value) })} /></td><td><span className={styles.typeBadge}>FULL</span></td><td>{item.location}</td><td><span className={errors.length ? styles.blockedBadge : styles.readyBadge}>{errors.length ? `BLOCK: ${errors.join(" / ")}` : "READY"}</span></td></tr>;
+                    return <tr key={item.barcode} className={errors.length ? styles.invalidRow : ""}><td><input aria-label={`Select ${item.barcode}`} type="checkbox" checked={selected.has(item.barcode)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(item.barcode); else next.delete(item.barcode); return next; })} /></td><td><code>{item.barcode}</code><small>{item.sku}</small></td><td><strong>{item.productName}</strong><small>{item.trackMode} · {item.unit}{isPacked(item) ? ` · 1 ${item.packageUnit} = ${item.unitsPerPack} ${item.unit}` : ""}</small></td><td><input type="date" value={item.lot} onChange={(event) => updateQueueItem(item.barcode, { lot: event.target.value })} /></td><td><input type="date" value={item.expiry} onChange={(event) => updateQueueItem(item.barcode, { expiry: event.target.value })} /></td><td><input className={styles.qtyInput} type="number" min="0.001" step="0.001" value={item.quantity} disabled={isPacked(item) || item.trackMode === "UNIT"} onChange={(event) => updateQueueItem(item.barcode, { quantity: Number(event.target.value) })} /></td><td><span className={styles.typeBadge}>FULL</span></td><td>{item.location}</td><td><span className={errors.length ? styles.blockedBadge : styles.readyBadge}>{errors.length ? `BLOCK: ${errors.join(" / ")}` : "READY"}</span></td></tr>;
                   })}
                 </tbody>
               </table>
