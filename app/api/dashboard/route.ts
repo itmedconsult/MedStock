@@ -97,6 +97,7 @@ function transaction(value: unknown): StockTransaction | null {
     action,
     reason: text(item.reason, action === "STOCK OUT" ? "USE" : action).toUpperCase(),
     location: text(item.location),
+    reference: text(item.reference),
   };
 }
 
