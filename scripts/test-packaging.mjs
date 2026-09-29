@@ -43,9 +43,9 @@ function setup(size = 5, unit = 'Bottle') {
   };
   const ss = { getSheetByName: name => sheets[name], getSpreadsheetTimeZone: () => 'Asia/Bangkok' };
   let seq = 0;
-  const ctx = vm.createContext({console, Date, LockService: {getDocumentLock: () => ({waitLock(){}, releaseLock(){}})}, Session: {getActiveUser: () => ({getEmail: () => 'test'})}, SpreadsheetApp: {flush(){}, CopyPasteType:{PASTE_FORMAT:1}}, Utilities: {getUuid: () => String(++seq).padStart(6,'0'),formatDate: () => '20260924-180000'}});
+  const ctx = vm.createContext({console, Date, LockService: {getDocumentLock: () => ({waitLock(){}, releaseLock(){}})}, Session: {getActiveUser: () => ({getEmail: () => 'test'})}, SpreadsheetApp: {flush(){}, CopyPasteType:{PASTE_FORMAT:1}}, Utilities: {getUuid: () => String(++seq).padStart(6,'0'),formatDate: (value, _zone, format) => format === 'yyyy-MM-dd' ? value.toISOString().slice(0,10) : '20260924-180000'}});
   for (const file of ['Packaging.gs','StockOperationsApi.gs','WebApi.gs']) vm.runInContext(fs.readFileSync(`google-apps-script/${file}`,'utf8'),ctx);
-  const imp = quantity => ctx.medStockImportBatch_({branch:'Thonglor',receivedDate:'2026-09-24',items:[{barcode,lot:'LOT',quantity}]},ss);
+  const imp = quantity => ctx.medStockImportBatch_({branch:'Thonglor',receivedDate:'2026-09-24',items:[{barcode,lot:'2026-09-24',expiry:'2028-09-24',quantity}]},ss);
   const cut = (quantity, mode = 'PARTIAL') => ctx.medStockCutStockBatch_({branch:'Thonglor',items:[{id:barcode,cutReason:'USE',cutMode:mode,cutQuantity:quantity}]},ss);
   return {ctx,ss,sheets,barcode,imp,cut};
 }
@@ -57,6 +57,9 @@ for (const [size,unit] of [[5,'Bottle'],[10,'Bottle'],[2,'Syringe'],[1,'Syringe'
   assert.equal(t.imp(size).importedCount,1);
   assert.equal(t.sheets.Inventory.rows[1][9],size);
   assert.equal(t.sheets.Inventory.rows[1][4],unit);
+  assert.equal(t.sheets.Inventory.rows[1][5].toISOString().slice(0,10),'2026-09-24');
+  assert.equal(t.sheets.Inventory.rows[1][6].toISOString().slice(0,10),'2028-09-24');
+  assert.equal(t.ctx.medStockWebApiDashboard_(t.ss).inventory[0].lot,'2026-09-24');
   assert.throws(() => t.imp(size), /not available|already/);
   assert.throws(() => t.cut(.5), /whole bottles/);
   assert.throws(() => t.cut(size+1), /Insufficient/);

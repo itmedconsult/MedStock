@@ -7,6 +7,11 @@ type InventoryTableProps = {
   inventory: InventoryItem[];
 };
 
+function displayDate(value?: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value || "—";
+}
+
 export function InventoryTable({ inventory }: InventoryTableProps) {
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("ALL");
@@ -15,6 +20,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
   const [group, setGroup] = useState("ALL");
   const [packageType, setPackageType] = useState("ALL");
   const [trackMode, setTrackMode] = useState("ALL");
+  const [lotDate, setLotDate] = useState("");
   const [sort, setSort] = useState("PRODUCT");
 
   const locations = useMemo(
@@ -37,7 +43,8 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
       const matchesGroup = group === "ALL" || item.sku.split("-")[0] === group;
       const matchesPackage = packageType === "ALL" || (item.packageUnit || item.unit) === packageType;
       const matchesTrackMode = trackMode === "ALL" || item.trackMode === trackMode;
-      return matchesQuery && matchesLocation && matchesStatus && matchesType && matchesGroup && matchesPackage && matchesTrackMode;
+      const matchesLot = !lotDate || item.lot === lotDate;
+      return matchesQuery && matchesLocation && matchesStatus && matchesType && matchesGroup && matchesPackage && matchesTrackMode && matchesLot;
     }).sort((left, right) => {
       if (sort === "SKU") return left.sku.localeCompare(right.sku) || left.id.localeCompare(right.id);
       if (sort === "QUANTITY_DESC") return right.quantity - left.quantity || left.sku.localeCompare(right.sku);
@@ -45,11 +52,11 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
       if (sort === "LOCATION") return left.location.localeCompare(right.location) || left.productName.localeCompare(right.productName);
       return left.productName.localeCompare(right.productName) || left.id.localeCompare(right.id);
     });
-  }, [containerType, group, inventory, location, packageType, query, sort, status, trackMode]);
+  }, [containerType, group, inventory, location, lotDate, packageType, query, sort, status, trackMode]);
 
   const fullContainers = filtered.filter((item) => item.containerType === "FULL").length;
   const openContainers = filtered.filter((item) => item.containerType === "OPEN").length;
-  const resetFilters = () => { setQuery(""); setLocation("ALL"); setStatus("ALL"); setContainerType("ALL"); setGroup("ALL"); setPackageType("ALL"); setTrackMode("ALL"); setSort("PRODUCT"); };
+  const resetFilters = () => { setQuery(""); setLocation("ALL"); setStatus("ALL"); setContainerType("ALL"); setGroup("ALL"); setPackageType("ALL"); setTrackMode("ALL"); setLotDate(""); setSort("PRODUCT"); };
 
   return (
     <section className={styles.inventoryPanel}>
@@ -108,6 +115,10 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
             </select>
           </label>
           <label>
+            <span>Lot date</span>
+            <input type="date" value={lotDate} onChange={(event) => setLotDate(event.target.value)} />
+          </label>
+          <label>
             <span>Sort</span>
             <select value={sort} onChange={(event) => setSort(event.target.value)}>
               <option value="PRODUCT">Product name: A–Z</option>
@@ -124,7 +135,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
       <div className={styles.tableScroll}>
         <table className={styles.inventoryTable}>
           <thead>
-            <tr><th>Barcode / Unique ID</th><th>Product</th><th>Location</th><th>Stock</th><th>Container</th><th>Tracking</th></tr>
+            <tr><th>Barcode / Unique ID</th><th>Product</th><th>Location</th><th>Lot</th><th>Stock</th><th>Container</th><th>Tracking</th></tr>
           </thead>
           <tbody>
             {filtered.map((item) => (
@@ -132,6 +143,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
                 <td><code>{item.id}</code></td>
                 <td><strong>{item.productName}</strong><small>{item.sku}</small></td>
                 <td><strong>{item.location || "—"}</strong></td>
+                <td><strong>{displayDate(item.lot)}</strong></td>
                 <td><strong>{item.quantity} {item.unit}</strong>{item.packageUnit && <small>1 {item.packageUnit} / Barcode · {item.unitsPerPack} {item.unit} when full</small>}<span className={item.status === "IN STOCK" ? styles.statusIn : styles.statusOut}>{item.status || "UNKNOWN"}</span></td>
                 <td><span className={item.containerType === "OPEN" ? styles.containerOpen : styles.containerFull}>{item.containerType || "—"}</span></td>
                 <td><span className={styles.trackMode}>{item.trackMode || "—"}</span></td>

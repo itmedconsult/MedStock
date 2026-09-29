@@ -15,8 +15,11 @@ function medStockStockOperationDispatch_(body, ss) {
     ss.setSpreadsheetTimeZone(MEDSTOCK_STOCK_API.TIME_ZONE);
   }
   if (["importStockBatch", "checkStockBatch", "cutStockBatch"].indexOf(body.action) !== -1) {
+    const inventorySheet = ss.getSheetByName(MEDSTOCK_STOCK_API.INVENTORY_SHEET);
     const logSheet = ss.getSheetByName(MEDSTOCK_STOCK_API.LOG_SHEET);
+    if (inventorySheet) inventorySheet.getRange("F:G").setNumberFormat("dd/MM/yyyy");
     if (logSheet) logSheet.getRange("A:A").setNumberFormat("dd/MM/yyyy HH:mm:ss");
+    if (logSheet) logSheet.getRange("F:G").setNumberFormat("dd/MM/yyyy");
   }
   if (body.action === "importStockBatch") return medStockImportBatch_(body, ss);
   if (body.action === "checkStockBatch") return medStockCheckStockBatch_(body, ss);
@@ -35,7 +38,7 @@ function medStockImportBatch_(body, ss) {
   const seen = {};
   const requested = body.items.map(function(value, index) {
     const barcode = medStockStockText_(value && value.barcode, 64).toUpperCase();
-    const lot = medStockStockText_(value && value.lot, 100);
+    const lotText = medStockStockText_(value && value.lot, 10);
     const expiryText = medStockStockText_(value && value.expiry, 10);
     const quantity = Number(value && value.quantity);
     if (!/^[A-Z]{2,6}-\d{3}-\d{6}-[A-Z]\d{4}$/.test(barcode)) {
@@ -46,7 +49,7 @@ function medStockImportBatch_(body, ss) {
     seen[barcode] = true;
     return {
       barcode: barcode,
-      lot: lot,
+      lot: lotText ? medStockStockDate_(lotText, "lot date at row " + (index + 1)) : "",
       expiry: expiryText ? medStockStockDate_(expiryText, "expiry date at row " + (index + 1)) : "",
       quantity: quantity
     };
