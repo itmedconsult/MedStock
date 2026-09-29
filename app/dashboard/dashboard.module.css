@@ -151,8 +151,9 @@
 .inventoryToolbarDetailed .inventoryFilters { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; }
 .inventoryFilters label { display: grid; gap: 4px; }
 .inventoryFilters label > span { color: #63766e; font-size: 13px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; }
-.inventoryFilters select { height: 38px; min-width: 128px; padding: 0 30px 0 10px; border: 1px solid #d9e2de; border-radius: 10px; outline: 0; color: #52635e; background: #fafbfa; font-size: 14px; }
-.inventoryToolbarDetailed .inventoryFilters select { width: 100%; min-width: 0; }
+.inventoryFilters select, .inventoryFilters input { height: 38px; min-width: 128px; padding: 0 10px; border: 1px solid #d9e2de; border-radius: 10px; outline: 0; color: #52635e; background: #fafbfa; font-size: 14px; }
+.inventoryFilters select { padding-right: 30px; }
+.inventoryToolbarDetailed .inventoryFilters select, .inventoryToolbarDetailed .inventoryFilters input { width: 100%; min-width: 0; }
 .resetFilters { height: 38px; padding: 0 12px; border: 1px solid #cfdcd6; border-radius: 10px; color: var(--dash-green); background: white; font-size: 13px; font-weight: 800; cursor: pointer; }
 .inventoryToolbarDetailed .resetFilters { justify-self: end; }
 .inventoryTable { width: 100%; border-collapse: collapse; }
@@ -200,7 +201,7 @@
   .logToolbar { align-items: stretch; flex-direction: column; }
   .inventoryToolbar { align-items: stretch; flex-direction: column; }
   .inventoryFilters, .inventoryToolbarDetailed .inventoryFilters { display: grid; grid-template-columns: 1fr; }
-  .inventoryFilters select { width: 100%; }
+  .inventoryFilters select, .inventoryFilters input { width: 100%; }
   .filterGroup button { flex: 1; }
   .logPanel footer, .inventoryPanel footer { flex-direction: column; }
 }
@@ -235,9 +236,9 @@
 /* Extra room for larger labels and controls. */
 .cardFilters select, .cardFilters label > input, .filterSearch > div { min-height: 44px; }
 .cardFilters label > span { line-height: 1.4; }
-.filterSearch input, .logSearch input, .cardFilters select, .cardFilters label > input, .inventoryFilters select { font-size: 16px; }
+.filterSearch input, .logSearch input, .cardFilters select, .cardFilters label > input, .inventoryFilters select, .inventoryFilters input { font-size: 16px; }
 .logSearch { min-height: 46px; }
-.inventoryFilters select { min-height: 44px; }
+.inventoryFilters select, .inventoryFilters input { min-height: 44px; }
 .stats span { white-space: normal; line-height: 1.45; }
 .skuStockList strong, .activityList strong { white-space: normal; line-height: 1.4; }
 .skuStockList > div { padding-top: 14px; padding-bottom: 14px; }

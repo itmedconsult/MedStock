@@ -67,7 +67,8 @@ function medStockWebApiDashboard_(ss) {
       if (!id || !sku) return;
       const product = bySku[sku] || {};
       inventory.push({ id: id, sku: sku, productName: String(row[2] || product.name || sku).trim(),
-        unit: String(row[4] || product.unit || "units").trim(), location: String(row[7] || "").trim(),
+        unit: String(row[4] || product.unit || "units").trim(), lot: medStockWebApiDateOnly_(row[5], ss),
+        location: String(row[7] || "").trim(),
         status: String(row[8] || "").trim().toUpperCase(), quantity: medStockWebApiNumber_(row[9]),
         containerType: String(row[13] || "").trim().toUpperCase(), packageUnit: product.packageUnit || "",
         unitsPerPack: product.packageUnit ? Number(row[14]) : 0,
@@ -110,6 +111,17 @@ function medStockWebApiDashboard_(ss) {
 function medStockWebApiNumber_(value) {
   const number = Number(value);
   return isFinite(number) ? Math.round(number * 1000000) / 1000000 : 0;
+}
+function medStockWebApiDateOnly_(value, ss) {
+  const zone = ss.getSpreadsheetTimeZone() || "Asia/Bangkok";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value)) {
+    return Utilities.formatDate(value, zone, "yyyy-MM-dd");
+  }
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const match = /^(\d{2})(?:[\/-]?)(\d{2})(?:[\/-]?)(\d{4})$/.exec(text);
+  return match ? match[3] + "-" + match[2] + "-" + match[1] : "";
 }
 function medStockWebApiIso_(value, ss) {
   if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value)) return value.toISOString();
