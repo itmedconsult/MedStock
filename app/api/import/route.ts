@@ -25,6 +25,12 @@ function cleanText(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+function isIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 function parseItems(value: unknown): ImportItem[] {
   if (!Array.isArray(value) || value.length === 0) throw new Error("Import queue is empty.");
   if (value.length > 100) throw new Error("Import queue cannot contain more than 100 barcodes.");
@@ -33,15 +39,19 @@ function parseItems(value: unknown): ImportItem[] {
   return value.map((value, index) => {
     const row = typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
     const barcode = cleanText(row.barcode, 64).toUpperCase();
+    const lot = cleanText(row.lot, 10);
+    const expiry = cleanText(row.expiry, 10);
     const quantity = Number(row.quantity);
     if (!BARCODE_PATTERN.test(barcode)) throw new Error(`Row ${index + 1} has an invalid barcode.`);
     if (seen.has(barcode)) throw new Error(`Duplicate barcode: ${barcode}`);
+    if (lot && !isIsoDate(lot)) throw new Error(`Row ${index + 1} has an invalid lot date.`);
+    if (expiry && !isIsoDate(expiry)) throw new Error(`Row ${index + 1} has an invalid expiry date.`);
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error(`Row ${index + 1} has an invalid quantity.`);
     seen.add(barcode);
     return {
       barcode,
-      lot: cleanText(row.lot, 100),
-      expiry: cleanText(row.expiry, 10),
+      lot,
+      expiry,
       quantity,
     };
   });
@@ -59,7 +69,7 @@ export async function POST(request: Request) {
     const branch = cleanText(body.branch, 30);
     const receivedDate = cleanText(body.receivedDate, 10);
     if (!BRANCHES.has(branch)) throw new Error("Select a valid branch.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(receivedDate) || Number.isNaN(Date.parse(`${receivedDate}T00:00:00Z`))) {
+    if (!isIsoDate(receivedDate)) {
       throw new Error("Select a valid received date.");
     }
     const items = parseItems(body.items);

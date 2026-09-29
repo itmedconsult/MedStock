@@ -13,6 +13,7 @@ export type InventoryItem = {
   sku: string;
   productName: string;
   unit: string;
+  lot?: string;
   location: string;
   status: string;
   quantity: number;
