@@ -115,6 +115,8 @@
 .activityList strong { overflow: hidden; font-size: 15px; white-space: nowrap; text-overflow: ellipsis; }
 .activityList small { color: #63766e; font-size: 13px; }
 .activityList > div > b { font-size: 15px; }
+.recentActivityCard { height: 620px; display: flex; flex-direction: column; }
+.recentActivityCard .activityList { flex: 1; min-height: 0; max-height: none; }
 .recentActivityCard .activityList > div { grid-template-columns: auto minmax(0, 1fr); }
 .recentActivityCard .activityList > div > b { grid-column: 2; justify-self: start; margin-top: -7px; font-size: 13px; }
 .positive { color: #26745f; }.negative { color: #b45f31; }
