@@ -10,6 +10,7 @@
 /dist/
 
 # Environment files (keep the example file)
+env.local
 .env
 .env.local
 .env.development.local

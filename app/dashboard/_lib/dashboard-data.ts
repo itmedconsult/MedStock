@@ -24,6 +24,7 @@ export type InventoryItem = {
 
 export type StockTransaction = {
   id: string;
+  barcode?: string;
   occurredAt: string;
   type: "IN" | "OUT";
   sku: string;
@@ -152,4 +153,18 @@ export function createDailyMovements(transactions: StockTransaction[], days = 7)
   }
 
   return movements;
+}
+
+
+export function bangkokDateKey(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+export function formatBangkokDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-GB", { timeZone: "Asia/Bangkok", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 }

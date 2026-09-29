@@ -83,6 +83,7 @@ function transaction(value: unknown): StockTransaction | null {
   return {
     id,
     occurredAt,
+    barcode: text(item.barcode, text(item.uniqueId)),
     type,
     sku,
     productName: text(item.productName, sku),

@@ -1,4 +1,5 @@
-import type { StockTransaction } from "../_lib/dashboard-data";
+import { useState } from "react";
+import { formatBangkokDateTime, type StockTransaction } from "../_lib/dashboard-data";
 import { IconSearch } from "@tabler/icons-react";
 import styles from "../dashboard.module.css";
 
@@ -8,36 +9,45 @@ type TransactionTableProps = {
   typeFilter: "ALL" | "IN" | "OUT";
   onQueryChange: (value: string) => void;
   onTypeChange: (value: "ALL" | "IN" | "OUT") => void;
+  showFilters?: boolean;
 };
 
-export function TransactionTable({ transactions, query, typeFilter, onQueryChange, onTypeChange }: TransactionTableProps) {
+export function TransactionTable({ transactions, query, typeFilter, onQueryChange, onTypeChange, showFilters = true }: TransactionTableProps) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = transactions.filter((item) => {
     const matchesType = typeFilter === "ALL" || item.type === typeFilter;
-    const matchesQuery = !normalizedQuery || item.productName.toLowerCase().includes(normalizedQuery) || item.sku.toLowerCase().includes(normalizedQuery) || item.id.toLowerCase().includes(normalizedQuery);
+    const matchesQuery = !normalizedQuery || item.productName.toLowerCase().includes(normalizedQuery) || item.sku.toLowerCase().includes(normalizedQuery) || item.id.toLowerCase().includes(normalizedQuery) || (item.barcode || "").toLowerCase().includes(normalizedQuery);
     return matchesType && matchesQuery;
-  });
+  }).sort((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const start = (currentPage - 1) * pageSize;
+  const visible = filtered.slice(start, start + pageSize);
 
   return (
     <section className={styles.logPanel}>
-      <div className={styles.logToolbar}>
-        <div className={styles.logSearch}><IconSearch size={18} /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search transaction, product, or SKU" /></div>
+      {showFilters && <div className={styles.logToolbar}>
+        <div className={styles.logSearch}><IconSearch size={18} /><input value={query} aria-label="Search transaction history" onChange={(event) => { setPage(1); onQueryChange(event.target.value); }} placeholder="Search barcode, transaction, product, or SKU" /></div>
         <div className={styles.filterGroup} aria-label="Transaction type filter">
-          {(["ALL", "IN", "OUT"] as const).map((type) => <button className={typeFilter === type ? styles.activeFilter : ""} onClick={() => onTypeChange(type)} key={type}>{type === "ALL" ? "All" : type === "IN" ? "Stock in" : "Cut stock"}</button>)}
+          {(["ALL", "IN", "OUT"] as const).map((type) => <button className={typeFilter === type ? styles.activeFilter : ""} onClick={() => { setPage(1); onTypeChange(type); }} key={type}>{type === "ALL" ? "All" : type === "IN" ? "Stock in" : "Cut stock"}</button>)}
         </div>
-      </div>
+      </div>}
 
       <div className={styles.tableScroll}>
         <table className={styles.logTable}>
-          <thead><tr><th>Date & time</th><th>Transaction</th><th>Product</th><th>Movement</th><th>Balance</th><th>Source</th></tr></thead>
+          <thead><tr><th>Date & time (ICT)</th><th>Barcode / Unique ID</th><th>Transaction</th><th>Product</th><th>Movement</th><th>Balance</th><th>Reason / Location</th><th>Source</th></tr></thead>
           <tbody>
-            {filtered.map((item) => (
+            {visible.map((item) => (
               <tr key={item.id}>
-                <td><strong>{new Date(item.occurredAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</strong><small>{new Date(item.occurredAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</small></td>
+                <td><time dateTime={item.occurredAt}>{formatBangkokDateTime(item.occurredAt)}</time></td>
+                <td><code>{item.barcode || "—"}</code></td>
                 <td><code>{item.id}</code></td>
                 <td><strong>{item.productName}</strong><small>{item.sku}</small></td>
                 <td><span className={item.type === "IN" ? styles.stockIn : styles.stockOut}>{item.type === "IN" ? "+" : ""}{item.quantity} {item.unit}</span></td>
                 <td>{item.balance} {item.unit}</td>
+                <td><strong>{item.reason}</strong><small>{item.location || "—"}</small></td>
                 <td><strong>{item.source}</strong><small>{item.actor}</small></td>
               </tr>
             ))}
@@ -45,7 +55,7 @@ export function TransactionTable({ transactions, query, typeFilter, onQueryChang
         </table>
         {!filtered.length && <div className={styles.noResults}>No transactions match this filter.</div>}
       </div>
-      <footer><span>Showing {filtered.length} of {transactions.length} transactions</span><span>Live data from Google Sheets · Log Data</span></footer>
+      <footer><span aria-live="polite">Showing {filtered.length ? start + 1 : 0}–{start + visible.length} of {filtered.length} transactions</span><div className={styles.pagination}><label>Rows <select aria-label="Transactions per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><button onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1}>Previous</button><span>Page {currentPage} / {pageCount}</span><button onClick={() => setPage(currentPage + 1)} disabled={currentPage === pageCount}>Next</button></div></footer>
     </section>
   );
 }
