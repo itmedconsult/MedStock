@@ -14,6 +14,8 @@ import {
   IconUpload,
 } from "@tabler/icons-react";
 import {
+  bangkokDateKey,
+  formatBangkokDateTime,
   createDailyMovements,
   createSkuStockSummary,
   summarizeDashboard,
@@ -53,6 +55,10 @@ export function Dashboard() {
   const [transactionLocation, setTransactionLocation] = useState("ALL");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [inventoryScope, setInventoryScope] = useState<{ sku: string; productName: string; location: string } | null>(null);
+  const scopedInventory = inventoryScope ? data.inventory.filter((item) => item.sku === inventoryScope.sku && item.containerType === "OPEN" && item.status === "IN STOCK" && item.quantity > 0 && (inventoryScope.location === "ALL" || item.location === inventoryScope.location)) : data.inventory;
+  const showOpenedInventory = (sku: string, productName: string) => { setInventoryScope({ sku, productName, location: stockLocation }); setActiveTab("inventory"); };
+  const showAllInventory = () => { setInventoryScope(null); setActiveTab("inventory"); };
 
   const loadDashboard = async () => {
     setState("loading");
@@ -105,8 +111,8 @@ export function Dashboard() {
   const filteredTransactions = useMemo(() => {
     const normalizedQuery = transactionQuery.trim().toLowerCase();
     return data.transactions.filter((item) => {
-      const itemDate = item.occurredAt.slice(0, 10);
-      return (!normalizedQuery || [item.id, item.sku, item.productName].some((value) => value.toLowerCase().includes(normalizedQuery)))
+      const itemDate = bangkokDateKey(item.occurredAt);
+      return (!normalizedQuery || [item.id, item.barcode || "", item.sku, item.productName].some((value) => value.toLowerCase().includes(normalizedQuery)))
         && (operationFilter === "ALL" || transactionOperation(item) === operationFilter)
         && (reasonFilter === "ALL" || item.reason === reasonFilter)
         && (actorFilter === "ALL" || item.actor === actorFilter)
@@ -123,7 +129,7 @@ export function Dashboard() {
     <main className={styles.dashboard}>
       <header className={styles.header}>
         <div className={styles.brand}><span>MS</span><div><strong>MedStock</strong><small>Google Sheets live</small></div></div>
-        <nav><button className={activeTab === "overview" ? styles.activeTab : ""} onClick={() => setActiveTab("overview")}><IconChartBar size={18} /> Overview</button><button className={activeTab === "inventory" ? styles.activeTab : ""} onClick={() => setActiveTab("inventory")}><IconPackage size={18} /> Inventory</button><button className={activeTab === "log" ? styles.activeTab : ""} onClick={() => setActiveTab("log")}><IconClipboardList size={18} /> Log Data</button></nav>
+        <nav><button className={activeTab === "overview" ? styles.activeTab : ""} onClick={() => setActiveTab("overview")}><IconChartBar size={18} /> Overview</button><button className={activeTab === "inventory" ? styles.activeTab : ""} onClick={showAllInventory}><IconPackage size={18} /> Inventory</button><button className={activeTab === "log" ? styles.activeTab : ""} onClick={() => setActiveTab("log")}><IconClipboardList size={18} /> Log Data</button></nav>
         <div className={styles.headerRight}><span className={styles.liveBadge}>LIVE</span><Link href="/import"><strong>Import</strong></Link><Link href="/create-barcode"><strong>Create Barcode</strong></Link></div>
       </header>
 
@@ -151,23 +157,23 @@ export function Dashboard() {
 
                 <section className={styles.overviewGrid}>
                   <article className={styles.skuStockCard}>
-                    <div className={styles.panelHeading}><div><p>Stock by product</p><h2>Quantity by SKU</h2></div><button onClick={() => setActiveTab("inventory")}>View Inventory</button></div>
+                    <div className={styles.panelHeading}><div><p>Stock by product</p><h2>Quantity by SKU</h2></div><button onClick={showAllInventory}>View Inventory</button></div>
                     <div className={styles.cardFilters}>
                       <label className={styles.filterSearch}><span>Search</span><div><IconSearch size={14} /><input aria-label="Search stock by product or SKU" value={stockQuery} onChange={(event) => setStockQuery(event.target.value)} placeholder="Product or SKU" /></div></label>
                       <label><span>Group</span><select value={stockGroup} onChange={(event) => setStockGroup(event.target.value)}><option value="ALL">All groups</option>{groups.map((value) => <option key={value}>{value}</option>)}</select></label>
                       <label><span>Status</span><select value={stockStatus} onChange={(event) => setStockStatus(event.target.value)}><option value="ALL">All stock</option><option value="IN_STOCK">In stock</option><option value="OPENED">Opened</option><option value="OUT_OF_STOCK">Out of stock</option><option value="LOW_STOCK">Low stock (1–5)</option></select></label>
                       <label><span>Package</span><select value={stockPackage} onChange={(event) => setStockPackage(event.target.value)}><option value="ALL">All packages</option>{packageTypes.map((value) => <option key={value}>{value}</option>)}</select></label>
                       <label><span>Location</span><select value={stockLocation} onChange={(event) => setStockLocation(event.target.value)}><option value="ALL">All locations</option>{locations.map((value) => <option key={value}>{value}</option>)}</select></label>
-                      <label><span>Sort</span><select value={stockSort} onChange={(event) => setStockSort(event.target.value)}><option value="QUANTITY_DESC">Quantity: high to low</option><option value="QUANTITY_ASC">Quantity: low to high</option><option value="NAME">Product name: A–Z</option><option value="SKU">SKU: A–Z</option></select></label>
+                      <label className={styles.sortFilter}><span>Sort</span><select value={stockSort} onChange={(event) => setStockSort(event.target.value)}><option value="QUANTITY_DESC">Quantity: high to low</option><option value="QUANTITY_ASC">Quantity: low to high</option><option value="NAME">Product name: A–Z</option><option value="SKU">SKU: A–Z</option></select></label>
                     </div>
                     <div className={styles.filterSummary}><span>Showing {skuStock.length} of {allSkuStock.length} SKUs</span><button onClick={resetStockFilters}>Reset filters</button></div>
-                    <div className={styles.skuStockList}>{skuStock.map((item) => <div key={item.sku}><div><strong>{item.productName}</strong><small>{item.sku}{item.openContainers ? ` · ${item.openContainers} open` : ""}</small></div><b>{item.barcodes}<small>item{item.barcodes === 1 ? "" : "s"}</small></b></div>)}</div>
+                    <div className={styles.skuStockList}>{skuStock.map((item) => <div key={item.sku}><div><strong>{item.productName}</strong><small>{item.sku}</small></div><b>{item.barcodes}<small>item{item.barcodes === 1 ? "" : "s"}</small></b><button className={styles.openedCount} disabled={item.openContainers === 0} onClick={() => showOpenedInventory(item.sku, item.productName)} aria-label={`View ${item.openContainers} opened barcodes for ${item.productName}`}><strong>{item.openContainers}</strong><small>Opened · View</small></button></div>)}</div>
                     {!skuStock.length && state !== "loading" && <div className={styles.noResults}>No products match these filters.</div>}
                   </article>
                   <article className={`${styles.activityCard} ${styles.recentActivityCard}`}>
                     <div className={styles.panelHeading}><div><p>Latest activity</p><h2>Recent transactions</h2></div><button onClick={() => setActiveTab("log")}>View Log Data</button></div>
                     <div className={`${styles.cardFilters} ${styles.transactionFilters}`}>
-                      <label className={styles.filterSearch}><span>Search</span><div><IconSearch size={14} /><input aria-label="Search recent transactions" value={transactionQuery} onChange={(event) => setTransactionQuery(event.target.value)} placeholder="Product, SKU, or transaction" /></div></label>
+                      <label className={styles.filterSearch}><span>Search</span><div><IconSearch size={14} /><input aria-label="Search recent transactions" value={transactionQuery} onChange={(event) => setTransactionQuery(event.target.value)} placeholder="Product, SKU, barcode, or transaction" /></div></label>
                       <label><span>Operation</span><select value={operationFilter} onChange={(event) => setOperationFilter(event.target.value)}><option value="ALL">All operations</option><option value="IMPORT">Import</option><option value="CUT">Cut</option><option value="ADJUSTMENT">Adjustment</option></select></label>
                       <label><span>Reason</span><select value={reasonFilter} onChange={(event) => setReasonFilter(event.target.value)}><option value="ALL">All reasons</option>{reasons.map((value) => <option key={value}>{value}</option>)}</select></label>
                       <label><span>User</span><select value={actorFilter} onChange={(event) => setActorFilter(event.target.value)}><option value="ALL">All users</option>{actors.map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -176,12 +182,16 @@ export function Dashboard() {
                       <label><span>To</span><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
                     </div>
                     <div className={styles.filterSummary}><span>{filteredTransactions.length} matching transactions</span><button onClick={resetTransactionFilters}>Reset filters</button></div>
-                    <div className={styles.activityList}>{recentTransactions.map((item) => <div key={item.id}><span className={item.type === "IN" ? styles.activityIn : styles.activityOut}>{item.type === "IN" ? <IconArrowUpRight size={17} /> : <IconArrowDownRight size={17} />}</span><div><strong>{item.productName}</strong><small>{item.sku} · {item.reason}{item.location ? ` · ${item.location}` : ""} · {new Date(item.occurredAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</small></div><b className={item.type === "IN" ? styles.positive : styles.negative}>{item.type === "IN" ? "+" : ""}{item.quantity} {item.unit}</b></div>)}</div>
+                    <div className={styles.activityList}>{recentTransactions.map((item) => <div key={item.id}><span className={item.type === "IN" ? styles.activityIn : styles.activityOut}>{item.type === "IN" ? <IconArrowUpRight size={17} /> : <IconArrowDownRight size={17} />}</span><div><strong>{item.productName}</strong><small>{item.sku} · {item.reason}{item.location ? ` · ${item.location}` : ""} · {formatBangkokDateTime(item.occurredAt)} ICT</small><code className={styles.activityBarcode}>{item.barcode || "Barcode unavailable"}</code></div><b className={item.type === "IN" ? styles.positive : styles.negative}>{item.type === "IN" ? "+" : ""}{item.quantity} {item.unit}</b></div>)}</div>
                     {!recentTransactions.length && state !== "loading" && <div className={styles.noResults}>No transactions are recorded in Log Data.</div>}
                   </article>
                 </section>
+                <section className={styles.historySection} aria-label="Transaction history">
+                  <div className={styles.panelHeading}><div><p>Browse past movements</p><h2>Transaction history</h2></div><span>Times in Bangkok (ICT)</span></div>
+                  <TransactionTable key={JSON.stringify([transactionQuery, operationFilter, reasonFilter, actorFilter, transactionLocation, dateFrom, dateTo])} transactions={filteredTransactions} query="" typeFilter="ALL" onQueryChange={setTransactionQuery} onTypeChange={setTypeFilter} showFilters={false} />
+                </section>
               </>
-            ) : activeTab === "inventory" ? <InventoryTable inventory={data.inventory} /> : <TransactionTable transactions={data.transactions} query={query} typeFilter={typeFilter} onQueryChange={setQuery} onTypeChange={setTypeFilter} />}
+            ) : activeTab === "inventory" ? <><div className={styles.inventoryScope}>{inventoryScope && <><div><strong>Opened stock · {inventoryScope.productName}</strong><span>{inventoryScope.sku} · {inventoryScope.location === "ALL" ? "All locations" : inventoryScope.location} · {scopedInventory.length} opened barcodes with remaining stock</span></div><button onClick={showAllInventory}>View all inventory</button></>}</div><InventoryTable key={inventoryScope ? `${inventoryScope.sku}-${inventoryScope.location}` : "all"} inventory={scopedInventory} /></> : <TransactionTable transactions={data.transactions} query={query} typeFilter={typeFilter} onQueryChange={setQuery} onTypeChange={setTypeFilter} />}
           </>
         )}
       </div>

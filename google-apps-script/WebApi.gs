@@ -91,7 +91,7 @@ function medStockWebApiDashboard_(ss) {
       else movement = Math.abs(movement);
       if (!movement) return;
       const product = bySku[sku] || {};
-      transactions.push({ id: id || "LOG-" + String(index + 2), occurredAt: medStockWebApiIso_(row[0], ss),
+      transactions.push({ id: id || "LOG-" + String(index + 2), barcode: String(row[2] || "").trim(), occurredAt: medStockWebApiIso_(row[0], ss),
         type: movement < 0 ? "OUT" : "IN", sku: sku, productName: String(row[4] || product.name || sku).trim(),
         quantity: movement, balance: after, unit: String(row[18] || product.unit || "units").trim(),
         source: String(row[16] || action || "Log Data").trim(), actor: String(row[10] || "Spreadsheet User").trim(),
