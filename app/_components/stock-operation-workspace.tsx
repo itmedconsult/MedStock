@@ -117,7 +117,7 @@ export function StockOperationWorkspace({ operation }: { operation: Operation })
   const [actualType, setActualType] = useState<StockType>("FULL");
   const [actualQuantity, setActualQuantity] = useState(0);
   const [cutReason, setCutReason] = useState<CutReason>("SALE");
-  const [cutMode, setCutMode] = useState<CutMode>("PARTIAL");
+  const [cutMode, setCutMode] = useState<CutMode>("ALL");
   const [cutQuantity, setCutQuantity] = useState(1);
   const [autoAdd, setAutoAdd] = useState(true);
   const [validation, setValidation] = useState("Scan a barcode to begin");
@@ -171,8 +171,8 @@ export function StockOperationWorkspace({ operation }: { operation: Operation })
       id: item.id, barcode: item.id, sku: item.sku, productName: item.productName, branch: item.location,
       typeBefore: item.containerType, quantityBefore: item.quantity, unit: item.unit, trackMode: item.trackMode, packageUnit: item.packageUnit, unitsPerPack: item.unitsPerPack, statusBefore: item.status,
       note: useDefaults ? "" : note, actualType: useDefaults ? item.containerType as StockType : actualType,
-      actualQuantity: useDefaults ? item.quantity : actualQuantity, cutReason, cutMode: item.trackMode === "UNIT" ? "ALL" : useDefaults ? "PARTIAL" : cutMode,
-      cutQuantity: item.trackMode === "UNIT" ? item.quantity : useDefaults ? 1 : cutMode === "ALL" ? item.quantity : cutQuantity,
+      actualQuantity: useDefaults ? item.quantity : actualQuantity, cutReason, cutMode: useDefaults ? "ALL" : cutMode,
+      cutQuantity: useDefaults || cutMode === "ALL" ? item.quantity : cutQuantity,
     };
     const calculation = isCheck ? checkResult(next) : cutResult(next);
     if (calculation.errors.length) throw new Error(calculation.errors.join(" / "));
@@ -183,7 +183,7 @@ export function StockOperationWorkspace({ operation }: { operation: Operation })
     event.preventDefault();
     try {
       const item = findItem(barcode); setBarcode(item.id); setScanned(item); setActualType(item.containerType as StockType); setActualQuantity(item.quantity);
-      setCutMode(item.trackMode === "UNIT" ? "ALL" : "PARTIAL"); setCutQuantity(item.trackMode === "UNIT" ? item.quantity : 1);
+      setCutMode("ALL"); setCutQuantity(item.quantity);
       setValidation(`READY TO QUEUE — final check on ${isCheck ? "CONFIRM CHECK" : "CUT STOCK"}`); setValidationType("ready");
       if (autoAdd) queueItem(item, true);
     } catch (error) {
