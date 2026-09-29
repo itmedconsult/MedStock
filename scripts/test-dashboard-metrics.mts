@@ -15,6 +15,7 @@ const data: DashboardData = {
     { id: "IN-3", occurredAt: "2026-09-25T03:00:00.000Z", type: "IN", sku: "PEN-003", productName: "Mounjaro", quantity: 1, balance: 1, unit: "Pen", source: "Import Stock API", actor: "Tester", action: "IMPORT", reason: "IMPORT", location: "Thonglor" },
     { id: "IN-4", occurredAt: "2026-09-25T04:00:00.000Z", type: "IN", sku: "AES-048", productName: "Aestox", quantity: 1, balance: 1, unit: "Bottle", source: "Import Stock API", actor: "Tester", action: "IMPORT", reason: "IMPORT", location: "Thonglor" },
     { id: "OUT-1", occurredAt: "2026-09-25T05:00:00.000Z", type: "OUT", sku: "AES-061", productName: "MBTOX", quantity: -65, balance: 35, unit: "U", source: "Cut Stock API", actor: "Tester", action: "STOCK OUT", reason: "USE", location: "Thonglor" },
+    { id: "REFUND-1", occurredAt: "2026-09-25T05:30:00.000Z", type: "IN", sku: "PEN-003", productName: "Mounjaro", quantity: 1, balance: 1, unit: "Pen", source: "Refund Stock API", actor: "Tester", action: "REFUND", reason: "REFUND", location: "Thonglor", reference: "SALE-1" },
   ],
   waitingForImport: 0,
   updatedAt: "2026-09-25T06:00:00.000Z",
@@ -37,6 +38,7 @@ assert.equal(skuStock.find((item) => item.sku === "PEN-003")?.group, "PEN");
 assert.deepEqual(skuStock.find((item) => item.sku === "AES-061")?.locations, ["Thonglor"]);
 assert.equal(transactionOperation(data.transactions[0]), "IMPORT");
 assert.equal(transactionOperation(data.transactions[4]), "CUT");
+assert.equal(transactionOperation(data.transactions[5]), "REFUND");
 
 const today = createDailyMovements(data.transactions, 1)[0];
 assert.equal(today.added, 4, "daily movement must count imported barcodes");

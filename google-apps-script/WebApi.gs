@@ -97,7 +97,7 @@ function medStockWebApiDashboard_(ss) {
         quantity: movement, balance: after, unit: String(row[18] || product.unit || "units").trim(),
         source: String(row[16] || action || "Log Data").trim(), actor: String(row[10] || "Spreadsheet User").trim(),
         action: action, reason: action === "STOCK OUT" ? "USE" : action,
-        location: String(row[9] || "").trim() });
+        location: String(row[9] || "").trim(), reference: String(row[11] || "").trim() });
     });
   }
   transactions.sort(function(a, b) { return b.occurredAt.localeCompare(a.occurredAt); });

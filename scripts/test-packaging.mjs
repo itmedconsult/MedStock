@@ -46,8 +46,9 @@ function setup(size = 5, unit = 'Bottle') {
   const ctx = vm.createContext({console, Date, LockService: {getDocumentLock: () => ({waitLock(){}, releaseLock(){}})}, Session: {getActiveUser: () => ({getEmail: () => 'test'})}, SpreadsheetApp: {flush(){}, CopyPasteType:{PASTE_FORMAT:1}}, Utilities: {getUuid: () => String(++seq).padStart(6,'0'),formatDate: (value, _zone, format) => format === 'yyyy-MM-dd' ? value.toISOString().slice(0,10) : '20260924-180000'}});
   for (const file of ['Packaging.gs','StockOperationsApi.gs','WebApi.gs']) vm.runInContext(fs.readFileSync(`google-apps-script/${file}`,'utf8'),ctx);
   const imp = quantity => ctx.medStockImportBatch_({branch:'Thonglor',receivedDate:'2026-09-24',items:[{barcode,lot:'2026-09-24',expiry:'2028-09-24',quantity}]},ss);
-  const cut = (quantity, mode = 'PARTIAL') => ctx.medStockCutStockBatch_({branch:'Thonglor',items:[{id:barcode,cutReason:'USE',cutMode:mode,cutQuantity:quantity}]},ss);
-  return {ctx,ss,sheets,barcode,imp,cut};
+  const cut = (quantity, mode = 'PARTIAL', reason = 'USE') => ctx.medStockCutStockBatch_({branch:'Thonglor',items:[{id:barcode,cutReason:reason,cutMode:mode,cutQuantity:quantity}]},ss);
+  const refund = (transactionId, quantity, confirmed = true) => ctx.medStockRefundStockBatch_({branch:'Thonglor',items:[{transactionId,refundQuantity:quantity,restockableConfirmed:confirmed}]},ss);
+  return {ctx,ss,sheets,barcode,imp,cut,refund};
 }
 
 for (const [size,unit] of [[5,'Bottle'],[10,'Bottle'],[2,'Syringe'],[1,'Syringe']]) {
@@ -98,6 +99,38 @@ for (const [size,unit] of [[5,'Bottle'],[10,'Bottle'],[2,'Syringe'],[1,'Syringe'
   assert.equal(data.transactions[0].unit,'CC');
 }
 console.log('PASS: box import/cut/check, duplicate and invalid input rejection, retained barcode capacity, historical log units and audit-only corrections. No live stock mutated.');
+
+{
+  const t=setup(5,'Bottle');
+  t.imp(5);
+  t.cut(2,'PARTIAL','USE');
+  t.cut(3,'PARTIAL','SALE');
+  const saleId=t.sheets['Log Data'].rows.at(-1)[1];
+  assert.equal(t.sheets.Inventory.rows[1][9],0);
+  assert.throws(()=>t.refund(saleId,1,false),/confirmed unopened/);
+  assert.throws(()=>t.refund(saleId,4),/exceeds the remaining/);
+  t.refund(saleId,1);
+  assert.equal(t.sheets.Inventory.rows[1][9],1);
+  assert.equal(t.sheets.Inventory.rows[1][8],'IN STOCK');
+  assert.equal(t.sheets.Inventory.rows[1][13],'OPEN');
+  const refundTransaction=t.ctx.medStockWebApiDashboard_(t.ss).transactions[0];
+  assert.equal(refundTransaction.action,'REFUND');
+  assert.equal(refundTransaction.reference,saleId);
+  t.refund(saleId,2);
+  assert.equal(t.sheets.Inventory.rows[1][9],3);
+  assert.throws(()=>t.refund(saleId,1),/fully refunded/);
+  console.log('PASS: partial sale refunds restore sellable stock, retain OPEN state, record the sale reference, and reject unsafe or excessive refunds.');
+}
+{
+  const t=setup(5,'Bottle');
+  t.imp(5);
+  t.cut(5,'ALL','SALE');
+  const saleId=t.sheets['Log Data'].rows.at(-1)[1];
+  t.refund(saleId,1);
+  assert.equal(t.sheets.Inventory.rows[1][9],1);
+  assert.equal(t.sheets.Inventory.rows[1][13],'OPEN');
+  console.log('PASS: a partial refund from a fully sold bulk pack returns as OPEN stock.');
+}
 
 {
  const t=setup(200,'IU');

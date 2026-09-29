@@ -10,11 +10,11 @@ const MEDSTOCK_STOCK_API = {
 };
 
 function medStockStockOperationDispatch_(body, ss) {
-  if (["importStockBatch", "checkStockBatch", "cutStockBatch"].indexOf(body.action) !== -1
+  if (["importStockBatch", "checkStockBatch", "cutStockBatch", "refundStockBatch"].indexOf(body.action) !== -1
       && ss.getSpreadsheetTimeZone() !== MEDSTOCK_STOCK_API.TIME_ZONE) {
     ss.setSpreadsheetTimeZone(MEDSTOCK_STOCK_API.TIME_ZONE);
   }
-  if (["importStockBatch", "checkStockBatch", "cutStockBatch"].indexOf(body.action) !== -1) {
+  if (["importStockBatch", "checkStockBatch", "cutStockBatch", "refundStockBatch"].indexOf(body.action) !== -1) {
     const inventorySheet = ss.getSheetByName(MEDSTOCK_STOCK_API.INVENTORY_SHEET);
     const logSheet = ss.getSheetByName(MEDSTOCK_STOCK_API.LOG_SHEET);
     if (inventorySheet) inventorySheet.getRange("F:G").setNumberFormat("dd/MM/yyyy");
@@ -24,6 +24,7 @@ function medStockStockOperationDispatch_(body, ss) {
   if (body.action === "importStockBatch") return medStockImportBatch_(body, ss);
   if (body.action === "checkStockBatch") return medStockCheckStockBatch_(body, ss);
   if (body.action === "cutStockBatch") return medStockCutStockBatch_(body, ss);
+  if (body.action === "refundStockBatch") return medStockRefundStockBatch_(body, ss);
   return null;
 }
 
@@ -542,6 +543,175 @@ function medStockCutStockBatch_(body, ss) {
       SpreadsheetApp.flush();
       if (failures.length) throw new Error("RECONCILIATION REQUIRED for " + batchId + ": " + failures.join(", "));
       throw new Error("Cut was rolled back: " + (error && error.message ? error.message : error));
+    }
+    return { ok: true, batchId: batchId, processedCount: items.length };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function medStockRefundStockBatch_(body, ss) {
+  const branch = medStockStockText_(body.branch, 30);
+  if (["Thonglor", "Silom"].indexOf(branch) === -1) throw new Error("Select a valid branch.");
+  if (!Array.isArray(body.items) || !body.items.length || body.items.length > MEDSTOCK_STOCK_API.MAX_ITEMS) {
+    throw new Error("Refund queue must contain 1 to " + MEDSTOCK_STOCK_API.MAX_ITEMS + " sale transactions.");
+  }
+
+  const seen = {};
+  const requested = body.items.map(function(value, index) {
+    const transactionId = medStockStockText_(value && value.transactionId, 80).toUpperCase();
+    const refundQuantity = Number(value && value.refundQuantity);
+    if (!transactionId) throw new Error("Row " + (index + 1) + " is missing a sale transaction ID.");
+    if (seen[transactionId]) throw new Error("Duplicate sale transaction: " + transactionId);
+    if (!Number.isFinite(refundQuantity) || refundQuantity <= 0 || Math.abs(refundQuantity * 1000000 - Math.round(refundQuantity * 1000000)) > 0.000001) {
+      throw new Error("Row " + (index + 1) + " has an invalid refund quantity.");
+    }
+    if (!value || value.restockableConfirmed !== true) {
+      throw new Error("Returned stock must be confirmed unopened and ready for sale.");
+    }
+    seen[transactionId] = true;
+    return { transactionId: transactionId, refundQuantity: medStockStockRound_(refundQuantity) };
+  });
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const inventory = ss.getSheetByName(MEDSTOCK_STOCK_API.INVENTORY_SHEET);
+    const log = ss.getSheetByName(MEDSTOCK_STOCK_API.LOG_SHEET);
+    if (!inventory || !log) throw new Error("Inventory or Log Data sheet is missing.");
+    medStockStockAssertHeaders_(inventory, [
+      "Unique ID", "SKU", "Product Name", "Category", "Unit", "Lot", "Expiry Date", "Location",
+      "Status", "Qty", "Barcode Value", "Received / Count Date", "Notes", "Stock Type", "Initial Qty",
+      "Opened At", "Updated At", "Used Up At", "Source Reference", "Updated By", "Track Mode", "Data Set"
+    ]);
+    medStockStockAssertHeaders_(log, [
+      "Timestamp", "Transaction ID", "Unique ID", "SKU", "Product Name", "Lot", "Expiry Date", "Action",
+      "Qty Change", "Location", "Staff", "Reference / Note", "Qty Before", "Qty After", "Stock Type",
+      "Stock Group", "Source", "Details"
+    ]);
+    if (inventory.getLastRow() < 2 || log.getLastRow() < 2) throw new Error("Inventory or Log Data is empty.");
+
+    const inventoryValues = inventory.getRange(2, 1, inventory.getLastRow() - 1, MEDSTOCK_STOCK_API.INVENTORY_COLUMNS).getValues();
+    const logValues = log.getRange(2, 1, log.getLastRow() - 1, MEDSTOCK_STOCK_API.LOG_COLUMNS).getValues();
+    const items = requested.map(function(item) {
+      const saleMatches = logValues.filter(function(row) {
+        return String(row[1] || "").trim().toUpperCase() === item.transactionId;
+      });
+      if (saleMatches.length !== 1) throw new Error(saleMatches.length ? "Duplicate transaction in Log Data: " + item.transactionId : "Sale transaction not found: " + item.transactionId);
+      const sale = saleMatches[0];
+      const saleAction = String(sale[7] || "").trim().toUpperCase();
+      const uniqueId = String(sale[2] || "").trim().toUpperCase();
+      const saleQuantity = Math.abs(Number(sale[8]));
+      const saleBranch = String(sale[9] || "").trim();
+      if (saleAction !== "SALE" || !Number.isFinite(saleQuantity) || saleQuantity <= 0) throw new Error("Only SALE transactions can be refunded: " + item.transactionId);
+      if (!uniqueId) throw new Error("Sale transaction has no Unique ID: " + item.transactionId);
+      if (saleBranch !== branch) throw new Error("Sale belongs to " + saleBranch + ": " + item.transactionId);
+
+      let refunded = 0;
+      logValues.forEach(function(row) {
+        const action = String(row[7] || "").trim().toUpperCase();
+        const reference = String(row[11] || "").trim().toUpperCase();
+        if (action === "REFUND" && reference === item.transactionId) refunded += Math.max(0, Number(row[8]) || 0);
+      });
+      refunded = medStockStockRound_(refunded);
+      const refundable = medStockStockRound_(saleQuantity - refunded);
+      if (refundable <= 0) throw new Error("Sale transaction is already fully refunded: " + item.transactionId);
+      if (item.refundQuantity > refundable) throw new Error("Refund quantity exceeds the remaining " + refundable + ": " + item.transactionId);
+
+      const inventoryMatches = [];
+      inventoryValues.forEach(function(row, index) {
+        const rowUniqueId = String(row[0] || "").trim().toUpperCase();
+        const barcode = String(row[10] || "").trim().toUpperCase();
+        if (rowUniqueId === uniqueId || barcode === uniqueId) inventoryMatches.push({ row: row, sheetRow: index + 2 });
+      });
+      if (inventoryMatches.length !== 1) throw new Error(inventoryMatches.length ? "Duplicate barcode in Inventory: " + uniqueId : "Barcode not found in Inventory: " + uniqueId);
+      const match = inventoryMatches[0];
+      const row = match.row;
+      const quantityBefore = Number(row[9]);
+      const initialQuantity = Number(row[14]);
+      if (!Number.isFinite(quantityBefore) || quantityBefore < 0) throw new Error("Inventory quantity is invalid: " + uniqueId);
+      const quantityAfter = medStockStockRound_(quantityBefore + item.refundQuantity);
+      if (Number.isFinite(initialQuantity) && initialQuantity > 0 && quantityAfter > initialQuantity) {
+        throw new Error("Refund would exceed the initial quantity for " + uniqueId + ".");
+      }
+      const currentType = String(row[13] || sale[14] || "FULL").trim().toUpperCase();
+      const saleType = String(sale[14] || currentType).trim().toUpperCase();
+      const fullyRestored = Number.isFinite(initialQuantity) && initialQuantity > 0 && quantityAfter === initialQuantity;
+      const typeAfter = fullyRestored && currentType === "FULL" && saleType === "FULL" ? "FULL" : "OPEN";
+      if (["FULL", "OPEN"].indexOf(typeAfter) === -1) throw new Error("Refund stock type is invalid: " + uniqueId);
+      const sku = String(row[1] || "").trim().toUpperCase();
+      if (typeAfter === "OPEN") {
+        const otherOpen = inventoryValues.some(function(other, index) {
+          return index + 2 !== match.sheetRow
+            && String(other[1] || "").trim().toUpperCase() === sku
+            && String(other[7] || "").trim() === branch
+            && String(other[13] || "").trim().toUpperCase() === "OPEN"
+            && String(other[8] || "").trim().toUpperCase() === "IN STOCK"
+            && Number(other[9]) > 0;
+        });
+        if (otherOpen) throw new Error("Refund would create a second OPEN barcode for " + sku + ". Finish the current opened stock first.");
+      }
+      return {
+        transactionId: item.transactionId, amount: item.refundQuantity, uniqueId: uniqueId,
+        sheetRow: match.sheetRow, row: row, sku: sku, productName: String(row[2] || sale[4] || sku).trim(),
+        branch: branch, quantityBefore: quantityBefore, quantityAfter: quantityAfter, typeAfter: typeAfter
+      };
+    });
+
+    const now = new Date();
+    const zone = ss.getSpreadsheetTimeZone() || MEDSTOCK_STOCK_API.TIME_ZONE;
+    const batchId = "REFUND-WEB-" + Utilities.formatDate(now, zone, "yyyyMMdd-HHmmss") + "-" + Utilities.getUuid().slice(0, 6).toUpperCase();
+    const staff = Session.getActiveUser().getEmail() || "MedStock Web";
+    const logRows = items.map(function(item, index) {
+      return [
+        now, batchId + "-" + String(index + 1).padStart(3, "0"), item.uniqueId, item.sku, item.productName,
+        item.row[5] || "", item.row[6] || "", "REFUND", item.amount, item.branch, staff, item.transactionId,
+        item.quantityBefore, item.quantityAfter, item.typeAfter, item.sku.split("-")[0], "Refund Stock API",
+        "Restockable customer return; original sale " + item.transactionId
+      ];
+    });
+
+    const logStart = medStockStockFindEmptyBlock_(log, logRows.length, MEDSTOCK_STOCK_API.LOG_COLUMNS);
+    medStockStockEnsureRows_(log, logStart + logRows.length - 1);
+    medStockStockCopyRowFormat_(log, logStart, logRows.length, MEDSTOCK_STOCK_API.LOG_COLUMNS);
+    const originalLog = log.getRange(logStart, 1, logRows.length, MEDSTOCK_STOCK_API.LOG_COLUMNS).getValues();
+    const changed = [];
+    let logAttempted = false;
+    try {
+      items.forEach(function(item) {
+        changed.push(item);
+        const extra = item.row.slice(13, 20);
+        extra[0] = item.typeAfter;
+        extra[3] = now;
+        extra[4] = "";
+        extra[5] = batchId;
+        extra[6] = staff;
+        inventory.getRange(item.sheetRow, 9, 1, 2).setValues([["IN STOCK", item.quantityAfter]]);
+        inventory.getRange(item.sheetRow, 14, 1, 7).setValues([extra]);
+      });
+      logAttempted = true;
+      log.getRange(logStart, 1, logRows.length, MEDSTOCK_STOCK_API.LOG_COLUMNS).setValues(logRows);
+      SpreadsheetApp.flush();
+    } catch (error) {
+      const failures = [];
+      changed.forEach(function(item) {
+        try {
+          inventory.getRange(item.sheetRow, 9, 1, 2).setValues([item.row.slice(8, 10)]);
+          inventory.getRange(item.sheetRow, 14, 1, 7).setValues([item.row.slice(13, 20)]);
+        } catch (rollbackError) {
+          failures.push(item.uniqueId);
+        }
+      });
+      if (logAttempted) {
+        try {
+          log.getRange(logStart, 1, logRows.length, MEDSTOCK_STOCK_API.LOG_COLUMNS).setValues(originalLog);
+        } catch (rollbackError) {
+          failures.push("Log Data");
+        }
+      }
+      SpreadsheetApp.flush();
+      if (failures.length) throw new Error("RECONCILIATION REQUIRED for " + batchId + ": " + failures.join(", "));
+      throw new Error("Refund was rolled back: " + (error && error.message ? error.message : error));
     }
     return { ok: true, batchId: batchId, processedCount: items.length };
   } finally {
