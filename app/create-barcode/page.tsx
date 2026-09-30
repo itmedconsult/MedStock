@@ -85,6 +85,7 @@ const categoryPalettes = [
   { accent: "#367b8a", tint: "#e2f0f3" },
 ];
 const PRINTER_NAME_STORAGE_KEY = "medstock:brother-printer-name:v1";
+const PRINTER_SCAN_TIMEOUT_MS = 10000;
 
 function paletteFor(category: string) {
   const hash = Array.from(category).reduce((total, character) => total + character.charCodeAt(0), 0);
@@ -127,17 +128,17 @@ function PrinterSelector({ id, printerName, installedPrinters, scanStatus, scanE
     <div className="printer-selection-controls">
       <select id={id} value={printerName} onChange={(event) => onChange(event.target.value)} disabled={disabled || scanStatus === "scanning"}>
         <option value="">Use printer saved in label template</option>
-        {savedPrinterMissing && <option value={printerName}>{printerName} (saved; not in current scan)</option>}
+        {savedPrinterMissing && <option value={printerName}>{printerName} (saved{scanStatus === "ready" ? "; not in current scan" : ""})</option>}
         {installedPrinters.map((name) => <option key={name} value={name}>{name}</option>)}
       </select>
-      <button type="button" onClick={onRefresh} disabled={disabled || scanStatus === "scanning"}>Scan again</button>
+      <button type="button" onClick={onRefresh} disabled={disabled || scanStatus === "scanning"}>{scanStatus === "idle" ? "Find printers" : "Scan again"}</button>
     </div>
     <small role={scanStatus === "error" ? "alert" : undefined}>
       {scanStatus === "scanning" ? "Scanning printers installed in Windows…"
-        : scanStatus === "error" ? `Could not scan printers: ${scanError}`
+        : scanStatus === "error" ? `Could not scan printers: ${scanError} Reload this page before printing; printer discovery may still be running in Brother b-PAC.`
         : scanStatus === "ready" && savedPrinterMissing ? "The saved printer was not found. Choose an installed printer before printing."
         : scanStatus === "ready" ? `${installedPrinters.length} installed printer${installedPrinters.length === 1 ? "" : "s"} found. Select the exact Windows printer name; availability is checked when printing.`
-        : "Printer names come from Brother b-PAC on this Windows computer."}
+        : "Click Find printers to list Windows printers through Brother b-PAC. Scan before printing with a saved selection."}
     </small>
   </div>;
 }
@@ -236,24 +237,32 @@ export default function CreateBarcodePage() {
   const scanPrinters = async () => {
     setPrinterScanStatus("scanning");
     setPrinterScanError("");
+    let timeout: number | undefined;
     try {
       const scan = printerScanPromise.current ?? getInstalledBrotherPrinters();
       printerScanPromise.current = scan;
-      setInstalledPrinters(await scan);
+      scan.then(
+        () => { if (printerScanPromise.current === scan) printerScanPromise.current = null; },
+        () => { if (printerScanPromise.current === scan) printerScanPromise.current = null; },
+      );
+      const printers = await Promise.race([
+        scan,
+        new Promise<never>((_, reject) => {
+          timeout = window.setTimeout(() => reject(new Error("Brother b-PAC did not respond within 10 seconds. Check its browser extension, printer drivers, and label template on this computer.")), PRINTER_SCAN_TIMEOUT_MS);
+        }),
+      ]);
+      setInstalledPrinters(printers);
       setPrinterScanStatus("ready");
     } catch (error) {
       setPrinterScanError(error instanceof Error ? error.message : "Printer scan failed.");
       setPrinterScanStatus("error");
     } finally {
-      printerScanPromise.current = null;
+      if (timeout !== undefined) window.clearTimeout(timeout);
     }
   };
 
-  useEffect(() => {
-    if (isBarcodeModalOpen || isReprintModalOpen) void scanPrinters();
-  }, [isBarcodeModalOpen, isReprintModalOpen]);
-
-  const printerSelectionMissing = Boolean(printerName && printerScanStatus === "ready" && !installedPrinters.includes(printerName));
+  const printerSelectionMissing = printerScanStatus === "error"
+    || Boolean(printerName && (printerScanStatus !== "ready" || !installedPrinters.includes(printerName)));
 
   const filtered = useMemo(() => products.filter((product) => {
     const term = search.trim().toLowerCase();
@@ -334,7 +343,6 @@ export default function CreateBarcodePage() {
 
   const openBarcodeModal = () => {
     if (!barcodeProducts.length) return;
-    setPrinterScanStatus("scanning");
     const productsToPrint = barcodeProducts.map(({ sku, date: stockDate, quantity }) => ({
       sku,
       date: stockDate,
@@ -359,7 +367,6 @@ export default function CreateBarcodePage() {
   };
 
   const openReprintModal = async () => {
-    setPrinterScanStatus("scanning");
     setHistoryLoading(true);
     setHistoryError("");
     setHistoryBranch(branch);
