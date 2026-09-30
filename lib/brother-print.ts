@@ -31,6 +31,11 @@ export type BrotherPrintLog = {
   message: string;
 };
 
+export type BrotherPrinterDiscovery = {
+  installedPrinters: string[];
+  onlineBrotherPrinters: string[];
+};
+
 type BpacLabelObject = {
   Text: string;
 };
@@ -127,7 +132,7 @@ async function loadBpac(): Promise<BpacModule> {
   }
 }
 
-export async function getInstalledBrotherPrinters(): Promise<string[]> {
+export async function discoverBrotherPrinters(): Promise<BrotherPrinterDiscovery> {
   const { IDocument: document } = await loadBpac();
   let isOpen = false;
   let step = "open the label template";
@@ -139,8 +144,23 @@ export async function getInstalledBrotherPrinters(): Promise<string[]> {
     step = "list Windows printers";
     const installed = await printer.GetInstalledPrinters();
     if (!Array.isArray(installed)) throw new Error("Brother b-PAC did not return a printer list.");
-    return [...new Set(installed.filter((name): name is string => typeof name === "string").map((name) => name.trim()).filter(Boolean))]
+    const installedPrinters = [...new Set(installed.filter((name): name is string => typeof name === "string").map((name) => name.trim()).filter(Boolean))]
       .sort((first, second) => first.localeCompare(second));
+    const ql820Printers = installedPrinters.filter((name) => /\bQL-820NWB\b/i.test(name));
+    const onlineBrotherPrinters: string[] = [];
+
+    step = "check Brother QL-820NWB status";
+    // b-PAC uses one event channel per method, so status requests must remain
+    // sequential or simultaneous responses can be delivered to the wrong call.
+    for (const name of ql820Printers) {
+      try {
+        if (await printer.IsPrinterOnline(name)) onlineBrotherPrinters.push(name);
+      } catch {
+        // Keep scanning other installed QL-820NWB drivers.
+      }
+    }
+
+    return { installedPrinters, onlineBrotherPrinters };
   } catch (error) {
     const detail = error instanceof Error ? error.message : typeof error === "string" ? error : "No error details were returned.";
     throw new Error(`Could not ${step}: ${detail}`);
