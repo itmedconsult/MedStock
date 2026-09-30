@@ -130,14 +130,20 @@ async function loadBpac(): Promise<BpacModule> {
 export async function getInstalledBrotherPrinters(): Promise<string[]> {
   const { IDocument: document } = await loadBpac();
   let isOpen = false;
+  let step = "open the label template";
   try {
     isOpen = await document.Open(TEMPLATE_PATH);
     if (!isOpen) throw new Error(`Unable to open the Brother label template at ${TEMPLATE_PATH}.`);
+    step = "read the template printer";
     const printer = await document.GetPrinter();
+    step = "list Windows printers";
     const installed = await printer.GetInstalledPrinters();
     if (!Array.isArray(installed)) throw new Error("Brother b-PAC did not return a printer list.");
     return [...new Set(installed.filter((name): name is string => typeof name === "string").map((name) => name.trim()).filter(Boolean))]
       .sort((first, second) => first.localeCompare(second));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : typeof error === "string" ? error : "No error details were returned.";
+    throw new Error(`Could not ${step}: ${detail}`);
   } finally {
     if (isOpen) {
       try { await document.Close(); } catch { /* A close error must not hide a successful printer scan. */ }
