@@ -36,6 +36,7 @@ type BpacLabelObject = {
 };
 
 type BpacPrinter = {
+  GetInstalledPrinters: () => Promise<unknown>;
   GetMediaName: () => Promise<string>;
   IsPrinterOnline: (printerName: string) => Promise<boolean>;
   readonly ErrorCode: Promise<number>;
@@ -50,6 +51,7 @@ type BpacDocument = {
   GetMediaName: () => Promise<string>;
   GetPrinter: () => Promise<BpacPrinter>;
   GetPrinterName: () => Promise<string>;
+  SetPrinter: (printerName: string, fit: boolean) => Promise<boolean>;
   StartPrint: (jobName: string, options: number) => Promise<boolean>;
   PrintOut: (copies: number, options: number) => Promise<boolean>;
   EndPrint: () => Promise<boolean>;
@@ -125,6 +127,24 @@ async function loadBpac(): Promise<BpacModule> {
   }
 }
 
+export async function getInstalledBrotherPrinters(): Promise<string[]> {
+  const { IDocument: document } = await loadBpac();
+  let isOpen = false;
+  try {
+    isOpen = await document.Open(TEMPLATE_PATH);
+    if (!isOpen) throw new Error(`Unable to open the Brother label template at ${TEMPLATE_PATH}.`);
+    const printer = await document.GetPrinter();
+    const installed = await printer.GetInstalledPrinters();
+    if (!Array.isArray(installed)) throw new Error("Brother b-PAC did not return a printer list.");
+    return [...new Set(installed.filter((name): name is string => typeof name === "string").map((name) => name.trim()).filter(Boolean))]
+      .sort((first, second) => first.localeCompare(second));
+  } finally {
+    if (isOpen) {
+      try { await document.Close(); } catch { /* A close error must not hide a successful printer scan. */ }
+    }
+  }
+}
+
 async function setLabelText(document: BpacDocument, objectName: string, value: string) {
   const object = await document.GetObject(objectName);
   if (!object) throw new Error(`The label template is missing the '${objectName}' object.`);
@@ -188,6 +208,7 @@ export async function printLabelsToBrother(
   labels: BrotherPrintLabel[],
   onLog?: LogHandler,
   onLabelStatus?: LabelStatusHandler,
+  selectedPrinterName = "",
 ): Promise<BrotherPrintBatchResult> {
   if (!labels.length) throw new Error("There are no labels to print.");
 
@@ -226,6 +247,16 @@ export async function printLabelsToBrother(
         document.GetPrinterName(),
         document.GetMediaName(),
       ]);
+      const requestedPrinterName = selectedPrinterName.trim();
+      if (requestedPrinterName) {
+        const selected = await document.SetPrinter(requestedPrinterName, false);
+        if (!selected) throw new Error(`Unable to select '${requestedPrinterName}'. Check its exact name in Windows Printers & scanners.`);
+        const activePrinterName = await document.GetPrinterName();
+        if (activePrinterName !== requestedPrinterName) {
+          throw new Error(`Brother selected '${activePrinterName}' instead of '${requestedPrinterName}'. Printing was stopped.`);
+        }
+        log("success", "PRINTER", `Selected Windows printer '${activePrinterName}'.`);
+      }
       printer = await document.GetPrinter();
       const [printerName, portName, printerMediaName] = await Promise.all([
         printer.Name,
