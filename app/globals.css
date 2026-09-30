@@ -125,12 +125,12 @@ button { color: inherit; }
 .printer-chip small { color: #82918b; font-size: 13px; }
 .printer-selection { display: grid; gap: 6px; margin: 0 0 18px; color: #315f53; font-size: 14px; font-weight: 700; text-align: left; }
 .printer-selection-controls { display: flex; gap: 8px; }
-.printer-selection select { min-width: 0; flex: 1; min-height: 42px; padding: 8px 11px; border: 1px solid #ccd8d3; border-radius: 9px; color: #28423b; background: white; font: 14px Arial, sans-serif; }
-.printer-selection select:focus { outline: 2px solid #57907f; outline-offset: 1px; }
+.printer-selection input { min-width: 0; flex: 1; min-height: 42px; padding: 8px 11px; border: 1px solid #ccd8d3; border-radius: 9px; color: #28423b; background: white; font: 14px Arial, sans-serif; }
+.printer-selection input:focus { outline: 2px solid #57907f; outline-offset: 1px; }
 .printer-selection button { flex: 0 0 auto; padding: 0 12px; border: 1px solid #bfcfc8; border-radius: 9px; color: #315f53; background: white; font-size: 13px; font-weight: 700; cursor: pointer; }
 .printer-selection button:disabled { opacity: .55; cursor: wait; }
 .printer-selection small { color: #71827c; font-size: 12px; font-weight: 400; line-height: 1.4; }
-@media (max-width: 480px) { .printer-selection-controls { flex-wrap: wrap; } .printer-selection select { flex-basis: 100%; } .printer-selection button { min-height: 38px; } }
+@media (max-width: 480px) { .printer-selection-controls { flex-wrap: wrap; } .printer-selection input { flex-basis: 100%; } .printer-selection button { min-height: 38px; } }
 .cancel-button { border: 1px solid #e7cbc6; color: var(--red); background: #fff5f3; }
 .cancel-button:hover { background: #f9e8e5; }
 .multi-barcode-modal { width: min(780px, 100%); max-height: calc(100vh - 40px); padding: 29px; overflow-y: auto; }
