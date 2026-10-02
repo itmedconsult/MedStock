@@ -123,6 +123,13 @@ button { color: inherit; }
 .printer-chip div { display: grid; gap: 1px; }
 .printer-chip strong { font-size: 15px; }
 .printer-chip small { color: #82918b; font-size: 13px; }
+.printer-selector { width: min(440px, 100%); margin: -7px auto 18px; text-align: left; }
+.printer-selector label { display: block; margin-bottom: 6px; color: #526d66; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.printer-selector-controls { display: flex; gap: 8px; }
+.printer-selector select { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #d3e0da; border-radius: 10px; background: #fff; color: #173d35; font: inherit; }
+.printer-selector-controls button { display: grid; place-items: center; width: 42px; border: 1px solid #d3e0da; border-radius: 10px; background: #fff; color: #176d5d; cursor: pointer; }
+.printer-selector small { display: block; margin-top: 6px; color: #71817c; font-size: 12px; }
+.printer-selector .printer-selector-error { color: #b6483e; }
 .cancel-button { border: 1px solid #e7cbc6; color: var(--red); background: #fff5f3; }
 .cancel-button:hover { background: #f9e8e5; }
 .multi-barcode-modal { width: min(780px, 100%); max-height: calc(100vh - 40px); padding: 29px; overflow-y: auto; }
