@@ -15,6 +15,7 @@ export type InventoryItem = {
   productName: string;
   unit: string;
   lot?: string;
+  note?: string;
   location: string;
   status: string;
   quantity: number;
@@ -40,6 +41,7 @@ export type StockTransaction = {
   reason: string;
   location: string;
   reference?: string;
+  note?: string;
 };
 
 export type DailyMovement = {
