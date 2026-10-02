@@ -394,6 +394,7 @@ function medStockCutStockBatch_(body, ss) {
     const cutReason = medStockStockText_(value && value.cutReason, 10).toUpperCase();
     const cutMode = medStockStockText_(value && value.cutMode, 10).toUpperCase();
     const cutQuantity = Number(value && value.cutQuantity);
+    const note = medStockStockText_(value && value.note, 500);
     if (!id) throw new Error("Row " + (index + 1) + " is missing a barcode.");
     if (seen[id]) throw new Error("Duplicate barcode: " + id);
     if (["SALE", "USE"].indexOf(cutReason) === -1) throw new Error("Row " + (index + 1) + " has an invalid reason.");
@@ -402,7 +403,7 @@ function medStockCutStockBatch_(body, ss) {
       throw new Error("Row " + (index + 1) + " has an invalid cut quantity.");
     }
     seen[id] = true;
-    return { id: id, cutReason: cutReason, cutMode: cutMode, cutQuantity: medStockStockRound_(cutQuantity) };
+    return { id: id, cutReason: cutReason, cutMode: cutMode, cutQuantity: medStockStockRound_(cutQuantity), note: note };
   });
 
   const lock = LockService.getDocumentLock();
@@ -421,6 +422,9 @@ function medStockCutStockBatch_(body, ss) {
       "Qty Change", "Location", "Staff", "Reference / Note", "Qty Before", "Qty After", "Stock Type",
       "Stock Group", "Source", "Details"
     ]);
+    if (inventory.getRange(1, 23).getDisplayValue() !== "Note" || log.getRange(1, 20).getDisplayValue() !== "Note") {
+      throw new Error("Note columns are missing in Inventory or Log Data.");
+    }
     if (inventory.getLastRow() < 2) throw new Error("Inventory is empty.");
 
     const inventoryValues = inventory.getRange(2, 1, inventory.getLastRow() - 1, MEDSTOCK_STOCK_API.INVENTORY_COLUMNS).getValues();
@@ -453,11 +457,12 @@ function medStockCutStockBatch_(body, ss) {
       const typeAfter = item.cutMode === "PARTIAL" ? "OPEN" : typeBefore;
       const statusAfter = quantityAfter > 0 ? "IN STOCK" : item.cutReason === "SALE" && item.cutMode === "ALL" ? "SOLD" : "OUT OF STOCK";
       return {
-        id: item.id, cutReason: item.cutReason, cutMode: item.cutMode, amount: amount,
+        id: item.id, cutReason: item.cutReason, cutMode: item.cutMode, note: item.note, amount: amount,
         quantityAfter: quantityAfter, typeAfter: typeAfter, statusAfter: statusAfter,
         sheetRow: match.sheetRow, row: row, sku: String(row[1] || "").trim().toUpperCase(),
         productName: String(row[2] || "").trim(), branch: itemBranch, quantityBefore: quantityBefore,
-        typeBefore: typeBefore, statusBefore: statusBefore, trackMode: trackMode
+        typeBefore: typeBefore, statusBefore: statusBefore, trackMode: trackMode,
+        noteBefore: inventory.getRange(match.sheetRow, 23).getValue()
       };
     });
 
@@ -504,6 +509,7 @@ function medStockCutStockBatch_(body, ss) {
     medStockStockEnsureRows_(log, logStart + logRows.length - 1);
     medStockStockCopyRowFormat_(log, logStart, logRows.length, MEDSTOCK_STOCK_API.LOG_COLUMNS);
     const originalLog = log.getRange(logStart, 1, logRows.length, MEDSTOCK_STOCK_API.LOG_COLUMNS).getValues();
+    const originalLogNotes = log.getRange(logStart, 20, logRows.length, 1).getValues();
     const changed = [];
     let logAttempted = false;
     try {
@@ -519,9 +525,11 @@ function medStockCutStockBatch_(body, ss) {
         extra[6] = staff;
         inventory.getRange(item.sheetRow, 9, 1, 2).setValues([[item.statusAfter, item.quantityAfter]]);
         inventory.getRange(item.sheetRow, 14, 1, 7).setValues([extra]);
+        inventory.getRange(item.sheetRow, 23).setValue(item.note);
       });
       logAttempted = true;
       log.getRange(logStart, 1, logRows.length, MEDSTOCK_STOCK_API.LOG_COLUMNS).setValues(logRows);
+      log.getRange(logStart, 20, logRows.length, 1).setValues(items.map(function(item) { return [item.note]; }));
       SpreadsheetApp.flush();
     } catch (error) {
       const failures = [];
@@ -529,6 +537,7 @@ function medStockCutStockBatch_(body, ss) {
         try {
           inventory.getRange(item.sheetRow, 9, 1, 2).setValues([item.row.slice(8, 10)]);
           inventory.getRange(item.sheetRow, 14, 1, 7).setValues([item.row.slice(13, 20)]);
+          inventory.getRange(item.sheetRow, 23).setValue(item.noteBefore);
         } catch (rollbackError) {
           failures.push(item.id);
         }
@@ -536,6 +545,7 @@ function medStockCutStockBatch_(body, ss) {
       if (logAttempted) {
         try {
           log.getRange(logStart, 1, logRows.length, MEDSTOCK_STOCK_API.LOG_COLUMNS).setValues(originalLog);
+          log.getRange(logStart, 20, logRows.length, 1).setValues(originalLogNotes);
         } catch (rollbackError) {
           failures.push("Log Data");
         }
