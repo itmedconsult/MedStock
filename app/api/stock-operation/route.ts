@@ -47,7 +47,7 @@ function sanitizeItems(value: unknown, operation: StockOperation) {
     if (!new Set(["SALE", "USE"]).has(cutReason)) throw new Error(`Row ${index + 1} has an invalid reason.`);
     if (!new Set(["ALL", "PARTIAL"]).has(cutMode)) throw new Error(`Row ${index + 1} has an invalid cut mode.`);
     if (cutQuantity <= 0) throw new Error(`Row ${index + 1} cut quantity must be greater than zero.`);
-    return { id, cutReason, cutMode, cutQuantity };
+    return { id, cutReason, cutMode, cutQuantity, note: text(row.note, 500) };
   });
 }
 

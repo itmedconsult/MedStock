@@ -116,7 +116,7 @@ export function Dashboard() {
     const normalizedQuery = transactionQuery.trim().toLowerCase();
     return data.transactions.filter((item) => {
       const itemDate = bangkokDateKey(item.occurredAt);
-      return (!normalizedQuery || [item.id, item.barcode || "", item.sku, item.productName, item.actor].some((value) => value.toLowerCase().includes(normalizedQuery)))
+      return (!normalizedQuery || [item.id, item.barcode || "", item.sku, item.productName, item.actor, item.note || ""].some((value) => value.toLowerCase().includes(normalizedQuery)))
         && (operationFilter === "ALL" || transactionOperation(item) === operationFilter)
         && (reasonFilter === "ALL" || item.reason === reasonFilter)
         && (actorFilter === "ALL" || item.actor === actorFilter)
@@ -183,7 +183,7 @@ export function Dashboard() {
                 <section className={styles.historySection} aria-label="Transaction history">
                   <div className={styles.panelHeading}><div><p>Browse past movements</p><h2>Transaction history</h2></div><span>Times in Bangkok (ICT)</span></div>
                   <div className={`${styles.cardFilters} ${styles.transactionFilters} ${styles.historyFilters}`}>
-                    <label className={styles.filterSearch}><span>Search</span><div><IconSearch size={14} /><input aria-label="Search transaction history" value={transactionQuery} onChange={(event) => setTransactionQuery(event.target.value)} placeholder="Barcode, transaction ID, product, SKU, or user" /></div></label>
+                    <label className={styles.filterSearch}><span>Search</span><div><IconSearch size={14} /><input aria-label="Search transaction history" value={transactionQuery} onChange={(event) => setTransactionQuery(event.target.value)} placeholder="Barcode, product, SKU, customer, or note" /></div></label>
                     <label><span>Operation</span><select value={operationFilter} onChange={(event) => setOperationFilter(event.target.value)}><option value="ALL">All operations</option><option value="IMPORT">Import</option><option value="CUT">Cut</option><option value="REFUND">Refund</option><option value="ADJUSTMENT">Adjustment</option></select></label>
                     <label><span>Reason</span><select value={reasonFilter} onChange={(event) => setReasonFilter(event.target.value)}><option value="ALL">All reasons</option>{reasons.map((value) => <option key={value}>{value}</option>)}</select></label>
                     <label><span>User</span><select value={actorFilter} onChange={(event) => setActorFilter(event.target.value)}><option value="ALL">All users</option>{actors.map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -195,7 +195,7 @@ export function Dashboard() {
                   <TransactionTable key={JSON.stringify([transactionQuery, operationFilter, reasonFilter, actorFilter, transactionLocation, dateFrom, dateTo])} transactions={filteredTransactions} query="" typeFilter="ALL" onQueryChange={setTransactionQuery} onTypeChange={setTypeFilter} showFilters={false} refundedQuantityBySale={refundedQuantityBySale} onRefundComplete={loadDashboard} />
                 </section>
               </>
-            ) : activeTab === "inventory" ? <><div className={styles.inventoryScope}>{inventoryScope && <><div><strong>Opened stock · {inventoryScope.productName}</strong><span>{inventoryScope.sku} · {inventoryScope.location === "ALL" ? "All locations" : inventoryScope.location} · {scopedInventory.length} opened barcodes with remaining stock</span></div><button onClick={showAllInventory}>View all inventory</button></>}</div><InventoryTable key={inventoryScope ? `${inventoryScope.sku}-${inventoryScope.location}` : "all"} inventory={scopedInventory} /></> : <TransactionTable transactions={data.transactions} query={query} typeFilter={typeFilter} onQueryChange={setQuery} onTypeChange={setTypeFilter} />}
+            ) : activeTab === "inventory" ? <><div className={styles.inventoryScope}>{inventoryScope && <><div><strong>Opened stock · {inventoryScope.productName}</strong><span>{inventoryScope.sku} · {inventoryScope.location === "ALL" ? "All locations" : inventoryScope.location} · {scopedInventory.length} opened barcodes with remaining stock</span></div><button onClick={showAllInventory}>View all inventory</button></>}</div><InventoryTable key={inventoryScope ? `${inventoryScope.sku}-${inventoryScope.location}` : "all"} inventory={scopedInventory} transactions={data.transactions} /></> : <TransactionTable transactions={data.transactions} query={query} typeFilter={typeFilter} onQueryChange={setQuery} onTypeChange={setTypeFilter} />}
           </>
         )}
       </div>

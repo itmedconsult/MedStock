@@ -36,7 +36,7 @@ export function TransactionTable({
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = transactions.filter((item) => {
     const matchesType = typeFilter === "ALL" || item.type === typeFilter;
-    const matchesQuery = !normalizedQuery || item.productName.toLowerCase().includes(normalizedQuery) || item.sku.toLowerCase().includes(normalizedQuery) || item.id.toLowerCase().includes(normalizedQuery) || (item.barcode || "").toLowerCase().includes(normalizedQuery) || item.actor.toLowerCase().includes(normalizedQuery);
+    const matchesQuery = !normalizedQuery || [item.productName, item.sku, item.id, item.barcode || "", item.actor, item.note || ""].some((value) => value.toLowerCase().includes(normalizedQuery));
     return matchesType && matchesQuery;
   }).sort((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt));
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -91,7 +91,7 @@ export function TransactionTable({
   return (
     <section className={styles.logPanel}>
       {showFilters && <div className={styles.logToolbar}>
-        <div className={styles.logSearch}><IconSearch size={18} /><input value={query} aria-label="Search transaction history" onChange={(event) => { setPage(1); onQueryChange(event.target.value); }} placeholder="Search barcode, transaction ID, product, SKU, or user" /></div>
+        <div className={styles.logSearch}><IconSearch size={18} /><input value={query} aria-label="Search transaction history" onChange={(event) => { setPage(1); onQueryChange(event.target.value); }} placeholder="Search barcode, product, SKU, customer, or note" /></div>
         <div className={styles.filterGroup} aria-label="Transaction type filter">
           {(["ALL", "IN", "OUT"] as const).map((type) => <button className={typeFilter === type ? styles.activeFilter : ""} onClick={() => { setPage(1); onTypeChange(type); }} key={type}>{type === "ALL" ? "All" : type === "IN" ? "Stock in" : "Cut stock"}</button>)}
         </div>
@@ -99,7 +99,7 @@ export function TransactionTable({
 
       <div className={styles.tableScroll}>
         <table className={styles.logTable}>
-          <thead><tr><th>Date & time (ICT)</th><th>Barcode / Unique ID</th><th>Product</th><th>Movement</th><th>Balance</th><th>Reason / Location</th><th>Source</th>{refundsEnabled && <th>Action</th>}</tr></thead>
+          <thead><tr><th>Date & time (ICT)</th><th>Barcode / Unique ID</th><th>Product</th><th>Movement</th><th>Balance</th><th>Reason / Location</th><th>Note</th><th>Source</th>{refundsEnabled && <th>Action</th>}</tr></thead>
           <tbody>
             {visible.map((item) => {
               const saleQuantity = Math.abs(item.quantity);
@@ -114,6 +114,7 @@ export function TransactionTable({
                   <td><span className={item.type === "IN" ? styles.stockIn : styles.stockOut}>{item.type === "IN" ? "+" : ""}{item.quantity} {item.unit}</span></td>
                   <td>{item.balance} {item.unit}</td>
                   <td><strong>{item.reason}</strong><small>{item.location || "—"}</small></td>
+                  <td className={styles.transactionNote}>{item.note || "—"}</td>
                   <td><strong>{item.source}</strong><small>{item.actor}</small></td>
                   {refundsEnabled && <td>{isSale ? <button className={styles.refundButton} disabled={refundableQuantity <= 0} onClick={() => openRefund(item)}>{refundableQuantity <= 0 ? "Refunded" : refundedQuantity > 0 ? "Refund remaining" : "Refund"}</button> : <span className={styles.noAction}>—</span>}</td>}
                 </tr>

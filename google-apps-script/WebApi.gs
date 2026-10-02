@@ -61,7 +61,7 @@ function medStockWebApiDashboard_(ss) {
   if (!inventorySheet || !logSheet || !registrySheet) throw new Error("Inventory, Log Data or BC_Registry sheet is missing.");
   const inventory = [];
   if (inventorySheet.getLastRow() > 1) {
-    inventorySheet.getRange(2, 1, inventorySheet.getLastRow() - 1, 20).getValues().forEach(function(row) {
+    inventorySheet.getRange(2, 1, inventorySheet.getLastRow() - 1, 23).getValues().forEach(function(row) {
       const id = String(row[0] || "").trim();
       const sku = String(row[1] || "").trim().toUpperCase();
       if (!id || !sku) return;
@@ -72,12 +72,12 @@ function medStockWebApiDashboard_(ss) {
         status: String(row[8] || "").trim().toUpperCase(), quantity: medStockWebApiNumber_(row[9]),
         containerType: String(row[13] || "").trim().toUpperCase(), packageUnit: product.packageUnit || "",
         unitsPerPack: product.packageUnit ? Number(row[14]) : 0,
-        trackMode: String(product.trackMode || "").trim().toUpperCase() });
+        trackMode: String(product.trackMode || "").trim().toUpperCase(), note: String(row[22] || "").trim() });
     });
   }
   const transactions = [];
   if (logSheet.getLastRow() > 1) {
-    logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 19).getValues().forEach(function(row, index) {
+    logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 20).getValues().forEach(function(row, index) {
       const id = String(row[1] || "").trim();
       const sku = String(row[3] || "").trim().toUpperCase();
       if (!id || !sku) return;
@@ -86,6 +86,8 @@ function medStockWebApiDashboard_(ss) {
       let movement = medStockWebApiNumber_(row[8]);
       const rawAction = String(row[7] || "").trim().toUpperCase();
       const source = String(row[16] || rawAction || "Log Data").trim();
+      const reference = String(row[11] || "").trim();
+      const note = String(row[19] || "").trim() || (source === "Cut Stock API" && /^(Customer|Note): /.test(reference) ? reference.replace(/^(Customer|Note): /, "") : "");
       const action = rawAction === "RETURN" && source.toUpperCase().indexOf("REFUND") !== -1 ? "REFUND" : rawAction;
       if (String(row[16] || "") === "Pack Correction") return;
       const delta = after - before;
@@ -99,7 +101,7 @@ function medStockWebApiDashboard_(ss) {
         quantity: movement, balance: after, unit: String(row[18] || product.unit || "units").trim(),
         source: source, actor: String(row[10] || "Spreadsheet User").trim(),
         action: action, reason: action === "STOCK OUT" ? "USE" : action,
-        location: String(row[9] || "").trim(), reference: String(row[11] || "").trim() });
+        location: String(row[9] || "").trim(), reference: reference, note: note });
     });
   }
   transactions.sort(function(a, b) { return b.occurredAt.localeCompare(a.occurredAt); });

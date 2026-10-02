@@ -142,6 +142,7 @@
 .logTable td strong { max-width: 240px; overflow: hidden; color: var(--dash-ink); font-size: 14px; text-overflow: ellipsis; }
 .logTable td small { margin-top: 3px; color: #63766e; font-size: 13px; }
 .logTable code { color: #547068; font: 13px Consolas, monospace; }
+.logTable td.transactionNote { min-width: 180px; max-width: 300px; white-space: normal; overflow-wrap: anywhere; }
 .refundButton { min-width: 92px; padding: 8px 11px; border: 1px solid #b9d8cf; border-radius: 9px; color: var(--dash-green); background: #edf7f3; font-size: 13px; font-weight: 800; cursor: pointer; }
 .refundButton:hover { border-color: #7fb8a8; background: #e2f2ed; }
 .refundButton:disabled { border-color: #dfe6e2; color: #87938f; background: #f4f6f5; cursor: default; }
@@ -170,6 +171,7 @@
 .inventoryTable td strong { max-width: 260px; overflow: hidden; color: var(--dash-ink); font-size: 14px; text-overflow: ellipsis; }
 .inventoryTable td small { margin-top: 3px; color: #63766e; font-size: 13px; }
 .inventoryTable code { color: #547068; font: 13px Consolas, monospace; }
+.inventoryTable td.customerHistory { min-width: 180px; max-width: 290px; white-space: normal; }
 .statusIn, .statusOut, .containerOpen, .containerFull, .trackMode { display: inline-block; margin-top: 4px; padding: 4px 7px; border-radius: 7px; font-size: 13px; font-weight: 800; }
 .statusIn { color: #22705b; background: #e5f3ed; }
 .statusOut { color: #a65446; background: #f9e9e5; }

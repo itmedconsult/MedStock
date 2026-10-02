@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { IconSearch } from "@tabler/icons-react";
-import type { InventoryItem } from "../_lib/dashboard-data";
+import { formatBangkokDateTime, type InventoryItem, type StockTransaction } from "../_lib/dashboard-data";
 import styles from "../dashboard.module.css";
 
 type InventoryTableProps = {
   inventory: InventoryItem[];
+  transactions: StockTransaction[];
 };
 
 function displayDate(value?: string) {
@@ -12,7 +13,7 @@ function displayDate(value?: string) {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : value || "—";
 }
 
-export function InventoryTable({ inventory }: InventoryTableProps) {
+export function InventoryTable({ inventory, transactions }: InventoryTableProps) {
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("ALL");
   const [status, setStatus] = useState("ALL");
@@ -31,11 +32,22 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
   const packageTypes = useMemo(() => Array.from(new Set(inventory.map((item) => item.packageUnit || item.unit).filter(Boolean))).sort(), [inventory]);
   const trackModes = useMemo(() => Array.from(new Set(inventory.map((item) => item.trackMode).filter(Boolean))).sort(), [inventory]);
   const statuses = useMemo(() => Array.from(new Set(inventory.map((item) => item.status).filter(Boolean))).sort(), [inventory]);
+  const salesByBarcode = useMemo(() => {
+    const sales = new Map<string, StockTransaction[]>();
+    transactions.forEach((item) => {
+      if (item.action !== "SALE" || !item.note) return;
+      const barcode = (item.barcode || "").toUpperCase();
+      if (!barcode) return;
+      sales.set(barcode, [...(sales.get(barcode) || []), item]);
+    });
+    return sales;
+  }, [transactions]);
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return inventory.filter((item) => {
-      const matchesQuery = !normalizedQuery || [item.barcode || "", item.id, item.sku, item.productName]
+      const customerNotes = salesByBarcode.get((item.barcode || item.id).toUpperCase()) || [];
+      const matchesQuery = !normalizedQuery || [item.barcode || "", item.id, item.sku, item.productName, item.note || "", ...customerNotes.map((sale) => sale.note || "")]
         .some((value) => value.toLowerCase().includes(normalizedQuery));
       const matchesLocation = location === "ALL" || item.location === location;
       const matchesStatus = status === "ALL" || item.status === status;
@@ -52,7 +64,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
       if (sort === "LOCATION") return left.location.localeCompare(right.location) || left.productName.localeCompare(right.productName);
       return left.productName.localeCompare(right.productName) || left.id.localeCompare(right.id);
     });
-  }, [containerType, group, inventory, location, lotDate, packageType, query, sort, status, trackMode]);
+  }, [containerType, group, inventory, location, lotDate, packageType, query, salesByBarcode, sort, status, trackMode]);
 
   const fullContainers = filtered.filter((item) => item.containerType === "FULL").length;
   const openContainers = filtered.filter((item) => item.containerType === "OPEN").length;
@@ -66,7 +78,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search barcode, product, or SKU"
+            placeholder="Search barcode, product, SKU, or note"
             aria-label="Search inventory"
           />
         </div>
@@ -135,7 +147,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
       <div className={styles.tableScroll}>
         <table className={styles.inventoryTable}>
           <thead>
-            <tr><th>Barcode / Unique ID</th><th>Product</th><th>Location</th><th>Lot</th><th>Stock</th><th>Container</th><th>Tracking</th></tr>
+            <tr><th>Barcode / Unique ID</th><th>Product</th><th>Location</th><th>Lot</th><th>Stock</th><th>Note</th><th>Customer sale history</th><th>Container</th><th>Tracking</th></tr>
           </thead>
           <tbody>
             {filtered.map((item) => (
@@ -145,6 +157,8 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
                 <td><strong>{item.location || "—"}</strong></td>
                 <td><strong>{displayDate(item.lot)}</strong></td>
                 <td><strong>{item.quantity} {item.unit}</strong>{item.packageUnit && <small>1 {item.packageUnit} / Barcode · {item.unitsPerPack} {item.unit} when full</small>}<span className={item.status === "IN STOCK" ? styles.statusIn : styles.statusOut}>{item.status || "UNKNOWN"}</span></td>
+                <td className={styles.customerHistory}>{item.note || "—"}</td>
+                <td className={styles.customerHistory}>{(salesByBarcode.get((item.barcode || item.id).toUpperCase()) || []).map((sale) => <small key={sale.id}>{sale.note} · {Math.abs(sale.quantity)} {sale.unit} · {formatBangkokDateTime(sale.occurredAt)}</small>)}</td>
                 <td><span className={item.containerType === "OPEN" ? styles.containerOpen : styles.containerFull}>{item.containerType || "—"}</span></td>
                 <td><span className={styles.trackMode}>{item.trackMode || "—"}</span></td>
               </tr>

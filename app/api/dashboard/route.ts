@@ -62,6 +62,7 @@ function inventoryItem(value: unknown): InventoryItem | null {
     productName: text(item.productName, sku),
     unit: text(item.unit, "units"),
     lot: text(item.lot),
+    note: text(item.note).slice(0, 500),
     location: text(item.location),
     status: text(item.status).toUpperCase(),
     quantity: number(item.quantity),
@@ -98,6 +99,7 @@ function transaction(value: unknown): StockTransaction | null {
     reason: text(item.reason, action === "STOCK OUT" ? "USE" : action).toUpperCase(),
     location: text(item.location),
     reference: text(item.reference),
+    note: text(item.note).slice(0, 500),
   };
 }
 
