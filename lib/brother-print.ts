@@ -36,6 +36,7 @@ type BpacLabelObject = {
 };
 
 type BpacPrinter = {
+  GetInstalledPrinters: () => Promise<string[] | string>;
   GetMediaName: () => Promise<string>;
   IsPrinterOnline: (printerName: string) => Promise<boolean>;
   readonly ErrorCode: Promise<number>;
@@ -46,6 +47,7 @@ type BpacPrinter = {
 
 type BpacDocument = {
   Open: (templatePath: string) => Promise<boolean>;
+  SetPrinter: (printerName: string, fit: boolean) => Promise<boolean>;
   GetObject: (name: string) => Promise<BpacLabelObject | null>;
   GetMediaName: () => Promise<string>;
   GetPrinter: () => Promise<BpacPrinter>;
@@ -59,11 +61,14 @@ type BpacDocument = {
 
 type BpacModule = {
   IDocument: BpacDocument;
+  IsExtensionInstalled?: () => boolean;
 };
 
 const BPAC_MODULE_URL = process.env.NEXT_PUBLIC_BPAC_MODULE_URL ?? "/brother/bpac.js";
 const TEMPLATE_PATH = process.env.NEXT_PUBLIC_BROTHER_TEMPLATE_PATH ?? "C:\\MedStock\\labels\\medstock.lbx";
 const SEQUENCE_STORAGE_KEY = "medstock:barcode-sequences:v1";
+
+export type BrotherPrinterOption = { name: string; online: boolean };
 
 type BarcodeSequences = Record<string, number>;
 type LogHandler = (entry: BrotherPrintLog) => void;
@@ -78,10 +83,25 @@ function createLogger(onLog?: LogHandler) {
       message,
     };
 
-    const consoleMethod = level === "error" ? console.error : level === "warning" ? console.warn : console.info;
+    // The print dialog already displays errors; console.error opens Next's dev overlay over it.
+    const consoleMethod = level === "error" || level === "warning" ? console.warn : console.info;
     consoleMethod("[MedStock Brother Print]", entry);
     onLog?.(entry);
   };
+}
+
+function brotherErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message || fallback;
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") return error.message;
+  return fallback;
+}
+
+function explainBrotherError(error: unknown, fallback: string) {
+  const message = brotherErrorMessage(error, fallback);
+  return message === "Can't connect to b-PAC"
+    ? "Brother b-PAC browser extension cannot connect to its Windows runtime. Open MedStock in Chrome or Edge with the extension enabled, then retry the same barcode."
+    : message;
 }
 
 function formatStockDate(stockDate: string) {
@@ -117,11 +137,79 @@ function saveSequences(sequences: BarcodeSequences) {
 }
 
 async function loadBpac(): Promise<BpacModule> {
+  let bpac: BpacModule;
   try {
     const moduleUrl = BPAC_MODULE_URL;
-    return await import(/* webpackIgnore: true */ moduleUrl) as BpacModule;
+    bpac = await import(/* webpackIgnore: true */ moduleUrl) as BpacModule;
   } catch {
     throw new Error("Brother b-PAC is not available. Install b-PAC and its browser extension, then copy bpac.js to public/brother/bpac.js.");
+  }
+  if (bpac.IsExtensionInstalled?.() === false) {
+    throw new Error("Brother b-PAC browser extension is not connected. Open MedStock in Chrome or Edge with the Brother b-PAC extension enabled, then retry the same barcode.");
+  }
+  return bpac;
+}
+
+async function openTemplate(document: BpacDocument) {
+  const isOpen = await document.Open(TEMPLATE_PATH);
+  if (!isOpen) {
+    const code = await document.ErrorCode.catch(() => null);
+    throw new Error(`Unable to open the Brother label template at ${TEMPLATE_PATH}.${code === null ? "" : ` b-PAC error ${code}.`}`);
+  }
+}
+
+async function selectBrotherPrinter(document: BpacDocument, printerName: string) {
+  if (!printerName) throw new Error("Select a Brother printer before printing.");
+  const selected = await document.SetPrinter(printerName, false);
+  if (!selected) throw new Error(`Cannot use ${printerName} with this label template. Check its driver and label size in P-touch Editor.`);
+  const printer = await document.GetPrinter();
+  const actualName = await printer.Name;
+  if (actualName !== printerName) throw new Error(`Brother selected ${actualName} instead of ${printerName}. Printing was stopped.`);
+  if (!await printer.IsPrinterOnline(printerName)) {
+    throw new Error(`${printerName} is offline. ${await getPrinterError(printer)}`);
+  }
+  return printer;
+}
+
+export async function listBrotherPrinters(): Promise<BrotherPrinterOption[]> {
+  const bpac = await loadBpac();
+  const document = bpac.IDocument;
+  let isOpen = false;
+  try {
+    await openTemplate(document);
+    isOpen = true;
+    const printer = await document.GetPrinter();
+    const installed = await printer.GetInstalledPrinters();
+    const names = (Array.isArray(installed) ? installed : installed.split(/[\r\n;]+/))
+      .map((name) => name.trim())
+      .filter((name) => /^Brother\s+QL[-\s]/i.test(name));
+    return Promise.all([...new Set(names)].map(async (name) => ({
+      name,
+      online: await printer.IsPrinterOnline(name).catch(() => false),
+    })));
+  } catch (error) {
+    throw new Error(explainBrotherError(error, "Unable to find Brother printers."));
+  } finally {
+    if (isOpen) {
+      try { await document.Close(); } catch { /* No print job was sent. */ }
+    }
+  }
+}
+
+export async function checkBrotherPrintSetup(printerName: string) {
+  const bpac = await loadBpac();
+  const document = bpac.IDocument;
+  let isOpen = false;
+  try {
+    await openTemplate(document);
+    isOpen = true;
+    await selectBrotherPrinter(document, printerName);
+  } catch (error) {
+    throw new Error(explainBrotherError(error, "Brother printer setup check failed."));
+  } finally {
+    if (isOpen) {
+      try { await document.Close(); } catch { /* The preflight did not send a print job. */ }
+    }
   }
 }
 
@@ -186,6 +274,7 @@ async function checkPrinterAfterLabel(printer: BpacPrinter, printerName: string)
 
 export async function printLabelsToBrother(
   labels: BrotherPrintLabel[],
+  selectedPrinterName: string,
   onLog?: LogHandler,
   onLabelStatus?: LabelStatusHandler,
 ): Promise<BrotherPrintBatchResult> {
@@ -198,7 +287,7 @@ export async function printLabelsToBrother(
   try {
     bpac = await loadBpac();
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Brother b-PAC failed to load.";
+    const message = brotherErrorMessage(error, "Brother b-PAC failed to load.");
     labels.forEach((label) => onLabelStatus?.({ uuid: label.uuid, status: "failed", error: message }));
     log("error", "FAILED", message);
     return { sent: 0, failed: labels.length, pending: 0, error: message };
@@ -207,6 +296,7 @@ export async function printLabelsToBrother(
   const document = bpac.IDocument;
   let sent = 0;
   let failed = 0;
+  let firstError = "";
 
   log("success", "INIT", `b-PAC loaded. Preparing ${labels.length} individual label(s).`);
 
@@ -218,15 +308,15 @@ export async function printLabelsToBrother(
 
     try {
       log("info", "TEMPLATE", `Opening ${TEMPLATE_PATH}`);
-      isOpen = await document.Open(TEMPLATE_PATH);
-      if (!isOpen) throw new Error(`Unable to open the Brother label template at ${TEMPLATE_PATH}.`);
+      await openTemplate(document);
+      isOpen = true;
       log("success", "TEMPLATE", "Label template opened successfully.");
 
       const [templatePrinterName, templateMediaName] = await Promise.all([
         document.GetPrinterName(),
         document.GetMediaName(),
       ]);
-      printer = await document.GetPrinter();
+      printer = await selectBrotherPrinter(document, selectedPrinterName);
       const [printerName, portName, printerMediaName] = await Promise.all([
         printer.Name,
         printer.PortName,
@@ -267,14 +357,15 @@ export async function printLabelsToBrother(
       onLabelStatus?.({ uuid: label.uuid, status: "sent" });
       log("success", "LABEL_OK", `${label.uuid} was accepted with no Brother hardware error reported.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Brother QL-820NWB printing failed.";
+      const actionableMessage = explainBrotherError(error, "Brother printing failed.");
       let diagnostic = "";
 
       if (printer) diagnostic = ` ${await getPrinterError(printer)}`;
 
-      log("error", "FAILED", `${message}${diagnostic}`.trim());
+      log("error", "FAILED", `${actionableMessage}${diagnostic}`.trim());
+      if (!firstError) firstError = actionableMessage;
       failed += 1;
-      onLabelStatus?.({ uuid: label.uuid, status: "failed", error: message });
+      onLabelStatus?.({ uuid: label.uuid, status: "failed", error: actionableMessage });
 
       if (isStarted) {
         try {
@@ -301,13 +392,12 @@ export async function printLabelsToBrother(
   }
 
   const pending = labels.length - sent - failed;
-  const error = failed > 0 ? "Printing stopped after a label error. Clear the printer problem, then retry failed/unprinted labels." : undefined;
+  const error = failed > 0 ? firstError : undefined;
   log(failed > 0 ? "warning" : "success", "COMPLETE", `${sent} sent, ${failed} failed, ${pending} pending.`);
   return { sent, failed, pending, error };
 }
 
 export const brotherPrinterConfig = {
-  model: "Brother QL-820NWB",
   connection: "USB",
   templatePath: TEMPLATE_PATH,
 };

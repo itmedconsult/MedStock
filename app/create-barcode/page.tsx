@@ -8,7 +8,9 @@ import {
   BrotherLabelStatus,
   BrotherPrintLabel,
   BrotherPrintLog,
-  brotherPrinterConfig,
+  BrotherPrinterOption,
+  checkBrotherPrintSetup,
+  listBrotherPrinters,
   printLabelsToBrother,
 } from "@/lib/brother-print";
 import {
@@ -75,6 +77,8 @@ type PrintRunContext = {
   target: "create" | "reprint";
 };
 
+const PRINTER_STORAGE_KEY = "medstock:brother-printer:v1";
+
 const categoryPalettes = [
   { accent: "#2e7d6b", tint: "#e3f2ed" },
   { accent: "#c58148", tint: "#faeee3" },
@@ -123,6 +127,10 @@ export default function CreateBarcodePage() {
   const [printStatus, setPrintStatus] = useState<"idle" | "printing" | "success" | "error">("idle");
   const [printMessage, setPrintMessage] = useState("");
   const [printLogs, setPrintLogs] = useState<BrotherPrintLog[]>([]);
+  const [printerOptions, setPrinterOptions] = useState<BrotherPrinterOption[]>([]);
+  const [selectedPrinterName, setSelectedPrinterName] = useState("");
+  const [printerLoading, setPrinterLoading] = useState(false);
+  const [printerError, setPrinterError] = useState("");
   const [printLabels, setPrintLabels] = useState<PrintLabelState[]>([]);
   const [activeBatchId, setActiveBatchId] = useState("");
   const [initialPrintStarted, setInitialPrintStarted] = useState(false);
@@ -185,6 +193,52 @@ export default function CreateBarcodePage() {
   useEffect(() => {
     void flushPrintAttemptOutbox();
   }, []);
+
+  const refreshPrinters = async () => {
+    setPrinterLoading(true);
+    setPrinterError("");
+    try {
+      const options = await listBrotherPrinters();
+      setPrinterOptions(options);
+      if (!options.length) throw new Error("No Brother QL printer driver was found on this computer.");
+      const saved = window.localStorage.getItem(PRINTER_STORAGE_KEY);
+      setSelectedPrinterName((current) => {
+        if (options.some((option) => option.name === current)) return current;
+        if (saved && options.some((option) => option.name === saved)) return saved;
+        return options.find((option) => option.online)?.name ?? options[0].name;
+      });
+    } catch (error) {
+      setPrinterError(error instanceof Error ? error.message : "Unable to find Brother printers.");
+    } finally {
+      setPrinterLoading(false);
+    }
+  };
+
+  const selectPrinter = (name: string) => {
+    setSelectedPrinterName(name);
+    window.localStorage.setItem(PRINTER_STORAGE_KEY, name);
+    setPrintMessage("");
+  };
+
+  const printerSelector = (
+    <div className="printer-selector">
+      <label htmlFor={isReprintModalOpen ? "reprint-printer" : "barcode-printer"}>Brother printer</label>
+      <div className="printer-selector-controls">
+        <select
+          id={isReprintModalOpen ? "reprint-printer" : "barcode-printer"}
+          value={selectedPrinterName}
+          onChange={(event) => selectPrinter(event.target.value)}
+          disabled={printerLoading || printStatus === "printing" || !printerOptions.length}
+        >
+          {!selectedPrinterName && <option value="">Select a printer</option>}
+          {printerOptions.map((option) => <option key={option.name} value={option.name}>{option.name}</option>)}
+        </select>
+        <button type="button" onClick={() => void refreshPrinters()} disabled={printerLoading || printStatus === "printing"} aria-label="Refresh Brother printers"><IconRefresh size={18} /></button>
+      </div>
+      {printerError && <small className="printer-selector-error">{printerError}</small>}
+      {!printerError && <small>Installed printers on this computer. Choose the connected model before printing.</small>}
+    </div>
+  );
 
   const filtered = useMemo(() => products.filter((product) => {
     const term = search.trim().toLowerCase();
@@ -280,6 +334,7 @@ export default function CreateBarcodePage() {
     setPendingPrintProducts(productsToPrint);
     setPendingPrintBranch(branch);
     pendingPrintRequestId.current = crypto.randomUUID();
+    void refreshPrinters();
   };
 
   const refreshPrintHistory = async () => {
@@ -300,6 +355,7 @@ export default function CreateBarcodePage() {
     setPrintMessage("");
     setPrintLogs([]);
     setIsReprintModalOpen(true);
+    void refreshPrinters();
     try {
       await flushPrintAttemptOutbox();
       const batches = await refreshPrintHistory();
@@ -335,10 +391,10 @@ export default function CreateBarcodePage() {
   };
 
   const runBrotherPrint = async (labels: BrotherPrintLabel[], context: PrintRunContext) => {
-    if (!labels.length) return;
+    if (!labels.length || !selectedPrinterName) return;
 
     setPrintStatus("printing");
-    setPrintMessage(`Sending ${labels.length} ${labels.length === 1 ? "label" : "labels"} to Brother QL-820NWB…`);
+    setPrintMessage(`Sending ${labels.length} ${labels.length === 1 ? "label" : "labels"} to ${selectedPrinterName}…`);
     setPrintLogs([]);
 
     const targetUuids = new Set(labels.map((label) => label.uuid));
@@ -351,6 +407,7 @@ export default function CreateBarcodePage() {
     try {
       const result = await printLabelsToBrother(
         labels,
+        selectedPrinterName,
         (entry) => setPrintLogs((current) => [...current, entry]),
         (update) => {
           outcomes.set(update.uuid, update);
@@ -375,23 +432,25 @@ export default function CreateBarcodePage() {
 
       if (result.failed > 0 || result.pending > 0) {
         setPrintStatus("error");
-        setPrintMessage(`${result.sent} sent, ${result.failed} failed, ${result.pending} not attempted. Clear the printer error, then retry only failed/unprinted labels.${historyWarning}`);
+        setPrintMessage(`${result.sent} sent, ${result.failed} failed, ${result.pending} not attempted. ${result.error || "Clear the printer error."} Retry only failed/unprinted labels.${historyWarning}`);
       } else {
         setPrintStatus("success");
         setPrintMessage(`${result.sent} ${result.sent === 1 ? "label was" : "labels were"} accepted by Brother with no hardware error reported.${historyWarning}`);
       }
     } catch (error) {
       setPrintStatus("error");
-      setPrintMessage(error instanceof Error ? error.message : "Unable to print to Brother QL-820NWB.");
+      setPrintMessage(error instanceof Error ? error.message : "Unable to print to Brother.");
     }
   };
 
   const printWithBrother = async () => {
     if (!pendingPrintProducts.length || !pendingPrintRequestId.current) return;
     setPrintStatus("printing");
-    setPrintMessage("Issuing barcode numbers in Google Sheets…");
+    setPrintMessage("Checking Brother printer connection…");
     setPrintLogs([]);
     try {
+      await checkBrotherPrintSetup(selectedPrinterName);
+      setPrintMessage("Issuing barcode numbers in Google Sheets…");
       const batch = await reservePrintBatch(pendingPrintBranch, pendingPrintProducts, pendingPrintRequestId.current);
       const labels = batch.labels;
       setActiveBatchId(batch.id);
@@ -541,10 +600,7 @@ export default function CreateBarcodePage() {
             <h2 id="barcode-modal-title">{printLabels.length || pendingLabelCount} {(printLabels.length || pendingLabelCount) === 1 ? "label" : "labels"}</h2>
             <p className="barcode-help">{printLabels.length ? "These UUIDs were issued in Google Sheets when printing started and are safe to scan or retry." : "No UUID or BC_Registry row will be created until you click Print to Brother."}</p>
             <div className="batch-context"><span><IconMapPin size={15} /> {pendingPrintBranch}</span>{activeBatchId && <code>{activeBatchId}</code>}</div>
-            <div className="printer-chip">
-              <span className="printer-dot" />
-              <div><strong>{brotherPrinterConfig.model}</strong><small>{brotherPrinterConfig.connection} direct print</small></div>
-            </div>
+            {printerSelector}
             <div className="barcode-labels">
               {!printLabels.length && pendingPrintProducts.map((item) => {
                 const product = products.find((product) => product.sku === item.sku);
@@ -618,12 +674,12 @@ export default function CreateBarcodePage() {
               <button
                 className="print-button"
                 onClick={() => initialPrintStarted ? void runBrotherPrint(retryableLabels, { batchId: activeBatchId, attemptType: "RETRY", target: "create" }) : void printWithBrother()}
-                disabled={printStatus === "printing" || (!initialPrintStarted && !pendingPrintProducts.length) || (initialPrintStarted && (!activeBatchId || retryableLabels.length === 0))}
+                disabled={printStatus === "printing" || printerLoading || !!printerError || !selectedPrinterName || (!initialPrintStarted && !pendingPrintProducts.length) || (initialPrintStarted && (!activeBatchId || retryableLabels.length === 0))}
               >
                 {printStatus === "printing"
                   ? activeBatchId ? "Sending to printer…" : "Issuing barcodes…"
                   : !initialPrintStarted
-                    ? "Print to Brother QL-820NWB"
+                    ? `Print to ${selectedPrinterName || "Brother"}`
                     : retryableLabels.length > 0
                       ? `Retry ${retryableLabels.length} failed/unprinted`
                       : "All labels sent"}
@@ -642,6 +698,7 @@ export default function CreateBarcodePage() {
               <span className="reprint-icon"><IconHistory size={22} /></span>
               <div><p className="section-kicker">Print history</p><h2 id="reprint-modal-title">Reprint labels</h2><p>Select a branch, print batch, and only the damaged labels you need.</p></div>
             </div>
+            {printerSelector}
 
             <div className="reprint-branch-tabs" role="group" aria-label="Print history branch">
               {(["Thonglor", "Silom", "Legacy"] as PrintBranch[]).map((option) => <button key={option} className={historyBranch === option ? "active" : ""} onClick={() => changeHistoryBranch(option)}><IconMapPin size={15} /> {option}<span>{printBatches.filter((batch) => batch.branch === option).length}</span></button>)}
@@ -687,7 +744,7 @@ export default function CreateBarcodePage() {
             {reprintLabels.length > 0 && <section className="label-results" aria-label="Reprint label status"><div className="label-results-heading"><strong>Reprint results</strong><span>{reprintLabels.filter((label) => label.status === "sent").length}/{reprintLabels.length} sent</span></div><div className="label-result-list">{reprintLabels.map((label) => <article className={`label-result ${label.status}`} key={label.uuid}><div><strong>{label.name}</strong><code>{label.uuid}</code>{label.error && <small>{label.error}</small>}</div><span className="label-status">{label.status === "sent" ? "Sent" : label.status === "printing" ? "Printing…" : label.status === "failed" ? "Failed" : "Pending"}</span></article>)}</div></section>}
             {printLogs.length > 0 && <section className="print-log" aria-label="Brother reprint log"><div className="print-log-heading"><strong>Brother reprint log</strong><span>{printLogs.length} events</span></div><ol>{printLogs.map((entry, index) => <li className={entry.level} key={`${entry.timestamp}-${entry.step}-${index}`}><time>{entry.timestamp}</time><strong>{entry.step}</strong><span>{entry.message}</span></li>)}</ol></section>}
 
-            <div className="reprint-actions"><div><strong>{selectedReprintUuids.size} labels selected</strong><span>Original UUIDs will be reused. No inventory or running numbers will change.</span></div><button className="print-button" onClick={() => void reprintSelected()} disabled={!selectedReprintLabels.length || printStatus === "printing"}>{printStatus === "printing" ? "Sending to printer…" : `Reprint ${selectedReprintLabels.length || "selected"} ${selectedReprintLabels.length === 1 ? "label" : "labels"}`}</button><button className="cancel-button" onClick={closeReprintModal} disabled={printStatus === "printing"}>Close</button></div>
+            <div className="reprint-actions"><div><strong>{selectedReprintUuids.size} labels selected</strong><span>Original UUIDs will be reused. No inventory or running numbers will change.</span></div><button className="print-button" onClick={() => void reprintSelected()} disabled={!selectedReprintLabels.length || !selectedPrinterName || printerLoading || !!printerError || printStatus === "printing"}>{printStatus === "printing" ? "Sending to printer…" : `Reprint ${selectedReprintLabels.length || "selected"} ${selectedReprintLabels.length === 1 ? "label" : "labels"}`}</button><button className="cancel-button" onClick={closeReprintModal} disabled={printStatus === "printing"}>Close</button></div>
           </div>
         </div>
       )}
